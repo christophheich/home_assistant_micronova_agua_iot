@@ -19,6 +19,14 @@ class StubLocalBleAguaIOT:
     """Placeholder for the Bluetooth transport, which is not tested here."""
 
 
+class StubLocalMqttAguaIOT:
+    """Placeholder for the local MQTT transport, which is tested separately."""
+
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+
 coordinator_module = load_component_module(
     "coordinator",
     stubbed_modules={
@@ -26,7 +34,11 @@ coordinator_module = load_component_module(
             "DEFAULT_CHAR_UUID": "0000ffe1-0000-1000-8000-00805f9b34fb",
             "DEFAULT_SERVICE_UUID": "0000ffe5-0000-1000-8000-00805f9b34fb",
             "LocalBleAguaIOT": StubLocalBleAguaIOT,
-        }
+        },
+        "local_mqtt": {
+            "DEFAULT_LOCAL_MQTT_PORT": 1883,
+            "LocalMqttAguaIOT": StubLocalMqttAguaIOT,
+        },
     },
 )
 const = load_component_module("const")
@@ -35,7 +47,7 @@ AguaIOTDataUpdateCoordinator = coordinator_module.AguaIOTDataUpdateCoordinator
 AguaIOTUpdateError = coordinator_module.AguaIOTUpdateError
 
 
-def make_config_entry():
+def make_config_entry(connection_mode=None):
     """Return a config entry stub."""
     config_entry = MagicMock()
     config_entry.state = ConfigEntryState.SETUP_IN_PROGRESS
@@ -46,18 +58,22 @@ def make_config_entry():
         CONF_PASSWORD: "test",
         const.CONF_UUID: "test-uuid",
     }
-    config_entry.options = {}
+    options = {}
+    if connection_mode:
+        options[const.CONF_CONNECTION_MODE] = connection_mode
+    config_entry.options = options
     return config_entry
 
 
-def make_coordinator():
+def make_coordinator(connection_mode=None):
     """Return a coordinator with a mocked AguaIOT transport."""
     coordinator = AguaIOTDataUpdateCoordinator(
-        hass=MagicMock(), config_entry=make_config_entry()
+        hass=MagicMock(), config_entry=make_config_entry(connection_mode)
     )
-    coordinator.agua = MagicMock()
-    coordinator.agua.connect = AsyncMock()
-    coordinator.agua.update = AsyncMock()
+    if not connection_mode or connection_mode == const.CONNECTION_MODE_CLOUD:
+        coordinator.agua = MagicMock()
+        coordinator.agua.connect = AsyncMock()
+        coordinator.agua.update = AsyncMock()
     return coordinator
 
 
@@ -121,3 +137,10 @@ class TestFirstRefresh:
         await coordinator.async_config_entry_first_refresh()
 
         assert coordinator.last_update_success is True
+
+
+class TestConnectionModes:
+    def test_local_mqtt_mode_initialization(self):
+        coordinator = make_coordinator(const.CONNECTION_MODE_LOCAL_MQTT)
+        assert isinstance(coordinator.agua, StubLocalMqttAguaIOT)
+        assert coordinator.connection_mode == const.CONNECTION_MODE_LOCAL_MQTT
