@@ -31,7 +31,11 @@
         "title": "Micronova Agua IOT Optionen",
         "data": {
           "language": "Sprache für Beschreibungen",
-          "connection_mode": "Verbindungsmodus:"
+          "connection_mode": "Verbindungsmodus:",
+          "local_mqtt_port": "Lokaler MQTT-Server-Port (Standard: 1883).",
+          "allow_eeprom_writes": "EEPROM-Schreibzugriffe erlauben (nötig für Zieltemperaturen; Vorsicht: häufige Automationen verschleißen den Flash-Speicher).",
+          "max_eeprom_writes_per_hour": "Maximale EEPROM-Schreibvorgänge pro Stunde (Standard: 15).",
+          "max_eeprom_writes_per_day": "Maximale EEPROM-Schreibvorgänge pro 24 Stunden (Standard: 50)."
         },
         "sections": {
           "device_fixes": {
@@ -49,7 +53,8 @@
     "connection_mode": {
       "options": {
       "connection_cloud": "Cloud (Micronova API)",
-      "connection_bluetooth": "Bluetooth (auto-detect)"
+      "connection_bluetooth": "Bluetooth (auto-detect)",
+      "connection_local_mqtt": "Lokales MQTT (Navel 2.0 Wi-Fi)"
       }
     }
   }

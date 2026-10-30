@@ -84,9 +84,20 @@ CONF_CONNECTION_MODE = "connection_mode"
 CONF_BLE_BOOTSTRAP_DEVICES = "ble_bootstrap_devices"
 CONF_BLE_SERVICE_UUID = "ble_service_uuid"
 CONF_BLE_CHAR_UUID = "ble_char_uuid"
+CONF_LOCAL_MQTT_PORT = "local_mqtt_port"
+CONF_ALLOW_EEPROM_WRITES = "allow_eeprom_writes"
+CONF_MAX_EEPROM_WRITES_PER_HOUR = "max_eeprom_writes_per_hour"
+CONF_MAX_EEPROM_WRITES_PER_DAY = "max_eeprom_writes_per_day"
+
+DEFAULT_LOCAL_MQTT_PORT = 1883
+DEFAULT_ALLOW_EEPROM_WRITES = True
+DEFAULT_MAX_EEPROM_WRITES_PER_HOUR = 15
+DEFAULT_MAX_EEPROM_WRITES_PER_DAY = 50
+EEPROM_OFFSET_THRESHOLD = 32768
 
 CONNECTION_MODE_CLOUD = "connection_cloud"
 CONNECTION_MODE_BLUETOOTH = "connection_bluetooth"
+CONNECTION_MODE_LOCAL_MQTT = "connection_local_mqtt"
 
 AIR_VARIANTS = ["air", "air2", "air3", "air_palm"]
 WATER_VARIANTS = ["water", "water_boiler", "water_puffer", "h2o", "h2o_mandata"]
@@ -148,7 +159,7 @@ ENDPOINTS = {
         CONF_CUSTOMER_CODE: "746318",
         CONF_API_URL: "https://remote.mcz.it",
     },
-    "Easy Connect Poêle": {
+    "Easy Connect Po\u00eale": {
         CONF_CUSTOMER_CODE: "354925",
         CONF_API_URL: "https://remote.mcz.it",
     },
@@ -164,7 +175,7 @@ ENDPOINTS = {
         CONF_CUSTOMER_CODE: "326495",
         CONF_API_URL: "https://solartecnik.agua-iot.com",
     },
-    "EvaCalòr - PuntoFuoco": {
+    "EvaCal\u00f2r - PuntoFuoco": {
         CONF_CUSTOMER_CODE: "635987",
         CONF_API_URL: "https://evastampaggi.agua-iot.com",
     },
@@ -172,7 +183,7 @@ ENDPOINTS = {
         CONF_CUSTOMER_CODE: "505912",
         CONF_API_URL: "https://fontanaforni.agua-iot.com",
     },
-    "Fonte Flamme contrôle 1": {
+    "Fonte Flamme contr\u00f4le 1": {
         CONF_CUSTOMER_CODE: "848324",
         CONF_API_URL: "https://fonteflame.agua-iot.com",
     },

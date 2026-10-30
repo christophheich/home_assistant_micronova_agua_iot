@@ -20,6 +20,7 @@ from .aguaiot import (
 )
 from .const import (
     CONF_AIR_TEMP_FIX,
+    CONF_ALLOW_EEPROM_WRITES,
     CONF_API_URL,
     CONF_BLE_BOOTSTRAP_DEVICES,
     CONF_BLE_CHAR_UUID,
@@ -32,15 +33,24 @@ from .const import (
     CONF_DEVICE_FIXES,
     CONF_HTTP_TIMEOUT,
     CONF_LANGUAGE,
+    CONF_LOCAL_MQTT_PORT,
     CONF_LOGIN_API_URL,
+    CONF_MAX_EEPROM_WRITES_PER_DAY,
+    CONF_MAX_EEPROM_WRITES_PER_HOUR,
     CONF_READING_ERROR_FIX,
     CONF_UPDATE_INTERVAL,
     CONF_UUID,
     CONNECTION_MODE_BLUETOOTH,
     CONNECTION_MODE_CLOUD,
+    CONNECTION_MODE_LOCAL_MQTT,
+    DEFAULT_ALLOW_EEPROM_WRITES,
+    DEFAULT_LOCAL_MQTT_PORT,
+    DEFAULT_MAX_EEPROM_WRITES_PER_DAY,
+    DEFAULT_MAX_EEPROM_WRITES_PER_HOUR,
     DOMAIN,
 )
 from .local_ble import DEFAULT_CHAR_UUID, DEFAULT_SERVICE_UUID, LocalBleAguaIOT
+from .local_mqtt import LocalMqttAguaIOT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -119,8 +129,33 @@ class AguaIOTDataUpdateCoordinator(DataUpdateCoordinator):
                 ),
                 **client_kwargs,
             )
+        elif connection_mode == CONNECTION_MODE_LOCAL_MQTT:
+            self.agua = LocalMqttAguaIOT(
+                hass=hass,
+                port=config_entry.options.get(
+                    CONF_LOCAL_MQTT_PORT, DEFAULT_LOCAL_MQTT_PORT
+                ),
+                allow_eeprom_writes=config_entry.options.get(
+                    CONF_ALLOW_EEPROM_WRITES, DEFAULT_ALLOW_EEPROM_WRITES
+                ),
+                max_eeprom_writes_per_hour=config_entry.options.get(
+                    CONF_MAX_EEPROM_WRITES_PER_HOUR, DEFAULT_MAX_EEPROM_WRITES_PER_HOUR
+                ),
+                max_eeprom_writes_per_day=config_entry.options.get(
+                    CONF_MAX_EEPROM_WRITES_PER_DAY, DEFAULT_MAX_EEPROM_WRITES_PER_DAY
+                ),
+                cached_devices=config_entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES),
+                **client_kwargs,
+            )
         else:
             self.agua = aguaiot(**client_kwargs)
+
+    @property
+    def connection_mode(self) -> str:
+        """Return the active connection mode."""
+        return self.config_entry.options.get(
+            CONF_CONNECTION_MODE, CONNECTION_MODE_CLOUD
+        )
 
     async def _async_setup(self) -> None:
         """Connect to the AguaIOT platform"""
@@ -157,8 +192,8 @@ class AguaIOTDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Agua IOT error: {e}") from e
 
     async def _async_persist_ble_bootstrap_if_needed(self) -> None:
-        """Persist BLE bootstrap data when it is freshly learned from the cloud."""
-        if not isinstance(self.agua, LocalBleAguaIOT) or not self.agua.cache_dirty:
+        """Persist bootstrap data when it is freshly learned from the cloud."""
+        if not hasattr(self.agua, "cache_dirty") or not getattr(self.agua, "cache_dirty"):
             return
 
         updated_data = {

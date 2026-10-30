@@ -36,7 +36,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # Services
     async def async_close_connection(event: Event) -> None:
         """Close AguaIOT connection on HA Stop."""
-        # await agua.close()
+        if hasattr(coordinator.agua, "stop_server"):
+            await coordinator.agua.stop_server()
+        elif hasattr(coordinator.agua, "close"):
+            await coordinator.agua.close()
 
     config_entry.async_on_unload(
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, async_close_connection)
@@ -46,4 +49,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(config_entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(config_entry, PLATFORMS)
+    if unload_ok:
+        coordinator: AguaIOTDataUpdateCoordinator = config_entry.runtime_data
+        if hasattr(coordinator.agua, "stop_server"):
+            await coordinator.agua.stop_server()
+        elif hasattr(coordinator.agua, "close"):
+            await coordinator.agua.close()
+    return unload_ok

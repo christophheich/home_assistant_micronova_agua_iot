@@ -23,6 +23,7 @@ from .aguaiot import (
 )
 from .const import (
     CONF_AIR_TEMP_FIX,
+    CONF_ALLOW_EEPROM_WRITES,
     CONF_API_URL,
     CONF_BLE_BOOTSTRAP_DEVICES,
     CONF_BLE_CHAR_UUID,
@@ -36,16 +37,25 @@ from .const import (
     CONF_ENDPOINT,
     CONF_HTTP_TIMEOUT,
     CONF_LANGUAGE,
+    CONF_LOCAL_MQTT_PORT,
     CONF_LOGIN_API_URL,
+    CONF_MAX_EEPROM_WRITES_PER_DAY,
+    CONF_MAX_EEPROM_WRITES_PER_HOUR,
     CONF_READING_ERROR_FIX,
     CONF_UPDATE_INTERVAL,
     CONF_UUID,
     CONNECTION_MODE_BLUETOOTH,
     CONNECTION_MODE_CLOUD,
+    CONNECTION_MODE_LOCAL_MQTT,
+    DEFAULT_ALLOW_EEPROM_WRITES,
+    DEFAULT_LOCAL_MQTT_PORT,
+    DEFAULT_MAX_EEPROM_WRITES_PER_DAY,
+    DEFAULT_MAX_EEPROM_WRITES_PER_HOUR,
     DOMAIN,
     ENDPOINTS,
 )
 from .local_ble import DEFAULT_CHAR_UUID, DEFAULT_SERVICE_UUID, LocalBleAguaIOT
+from .local_mqtt import LocalMqttAguaIOT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -153,9 +163,10 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
         """Manage the options."""
         return await self.async_step_user()
 
-    def _build_client(self, connection_mode):
-        """Create the configured cloud or local BLE transport."""
+    def _build_client(self, connection_mode, user_input=None):
+        """Create the configured cloud, BLE, or local MQTT transport."""
         entry = self.config_entry
+        user_input = user_input or {}
         # Device fixes are stored in the device_fixes section, legacy entries
         # stored them flat.
         device_fixes = entry.options.get(CONF_DEVICE_FIXES) or {}
@@ -192,6 +203,39 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
                 char_uuid=self.config_entry.options.get(
                     CONF_BLE_CHAR_UUID, DEFAULT_CHAR_UUID
                 ),
+                **return_kwargs,
+            )
+
+        if connection_mode == CONNECTION_MODE_LOCAL_MQTT:
+            return LocalMqttAguaIOT(
+                hass=self.hass,
+                port=user_input.get(
+                    CONF_LOCAL_MQTT_PORT,
+                    self.config_entry.options.get(
+                        CONF_LOCAL_MQTT_PORT, DEFAULT_LOCAL_MQTT_PORT
+                    ),
+                ),
+                allow_eeprom_writes=user_input.get(
+                    CONF_ALLOW_EEPROM_WRITES,
+                    self.config_entry.options.get(
+                        CONF_ALLOW_EEPROM_WRITES, DEFAULT_ALLOW_EEPROM_WRITES
+                    ),
+                ),
+                max_eeprom_writes_per_hour=user_input.get(
+                    CONF_MAX_EEPROM_WRITES_PER_HOUR,
+                    self.config_entry.options.get(
+                        CONF_MAX_EEPROM_WRITES_PER_HOUR,
+                        DEFAULT_MAX_EEPROM_WRITES_PER_HOUR,
+                    ),
+                ),
+                max_eeprom_writes_per_day=user_input.get(
+                    CONF_MAX_EEPROM_WRITES_PER_DAY,
+                    self.config_entry.options.get(
+                        CONF_MAX_EEPROM_WRITES_PER_DAY,
+                        DEFAULT_MAX_EEPROM_WRITES_PER_DAY,
+                    ),
+                ),
+                cached_devices=entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES),
                 **return_kwargs,
             )
 
@@ -248,8 +292,47 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
                 {
                     CONNECTION_MODE_CLOUD,
                     CONNECTION_MODE_BLUETOOTH,
+                    CONNECTION_MODE_LOCAL_MQTT,
                 }
             ),
+            vol.Optional(
+                CONF_LOCAL_MQTT_PORT,
+                default=user_input.get(
+                    CONF_LOCAL_MQTT_PORT,
+                    self.config_entry.options.get(
+                        CONF_LOCAL_MQTT_PORT, DEFAULT_LOCAL_MQTT_PORT
+                    ),
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+            vol.Optional(
+                CONF_ALLOW_EEPROM_WRITES,
+                default=user_input.get(
+                    CONF_ALLOW_EEPROM_WRITES,
+                    self.config_entry.options.get(
+                        CONF_ALLOW_EEPROM_WRITES, DEFAULT_ALLOW_EEPROM_WRITES
+                    ),
+                ),
+            ): bool,
+            vol.Optional(
+                CONF_MAX_EEPROM_WRITES_PER_HOUR,
+                default=user_input.get(
+                    CONF_MAX_EEPROM_WRITES_PER_HOUR,
+                    self.config_entry.options.get(
+                        CONF_MAX_EEPROM_WRITES_PER_HOUR,
+                        DEFAULT_MAX_EEPROM_WRITES_PER_HOUR,
+                    ),
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=1, max=120)),
+            vol.Optional(
+                CONF_MAX_EEPROM_WRITES_PER_DAY,
+                default=user_input.get(
+                    CONF_MAX_EEPROM_WRITES_PER_DAY,
+                    self.config_entry.options.get(
+                        CONF_MAX_EEPROM_WRITES_PER_DAY,
+                        DEFAULT_MAX_EEPROM_WRITES_PER_DAY,
+                    ),
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=1, max=500)),
             vol.Optional(
                 CONF_UPDATE_INTERVAL,
                 default=user_input.get(
@@ -306,10 +389,13 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
                     CONF_CONNECTION_MODE, CONNECTION_MODE_CLOUD
                 ),
             )
+            agua = None
             try:
-                agua = self._build_client(connection_mode)
+                agua = self._build_client(connection_mode, user_input)
                 await agua.connect()
                 if connection_mode == CONNECTION_MODE_BLUETOOTH:
+                    await agua.validate_local_connection()
+                elif connection_mode == CONNECTION_MODE_LOCAL_MQTT:
                     await agua.validate_local_connection()
             except AguaIOTUnauthorized as e:
                 _LOGGER.error("Agua IOT Unauthorized: %s", e)
@@ -322,6 +408,9 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
                 errors["base"] = "unknown_error"
             else:
                 return self.async_create_entry(title="", data=user_input)
+            finally:
+                if agua and hasattr(agua, "stop_server"):
+                    await agua.stop_server()
 
         return self.async_show_form(
             step_id="user",
