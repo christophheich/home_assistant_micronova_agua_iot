@@ -40,6 +40,7 @@ Supports the following vendors (mobile apps):
 * Thermoflux
 * Total Control 3.0 (Extraflame)
 * TS Smart
+* TurboFonte
 * Wi-Phire
 
 Vendor apps **NOT** compatible (using a different platform or abstraction layer):
@@ -61,11 +62,19 @@ Or folow these steps:
 
 ## Local Bluetooth mode
 
-This integration now includes an experimental `Bluetooth` connection mode for Micronova stoves equipped with a local BLE module (for example the Micronova / Navel `T009_*` module seen by Home Assistant).
+This integration includes an experimental `Bluetooth` connection mode for Micronova stoves equipped with a local BLE module (for example the Micronova / Navel `T009_*` module seen by Home Assistant).
 
 You can enable this mode via the integration options after setup.
 
 For more information see [BLUETOOTH](docs/BLUETOOTH.md).
+
+## Local Wi-Fi MQTT mode
+
+This integration supports local control for Micronova stoves equipped with a Navel 2.0 Wi-Fi module.
+
+Home Assistant runs an embedded local MQTT broker on port 1883. By redirecting the vendor server hostname to Home Assistant via DNS rewrite, the stove connects directly to your local Home Assistant instance with no cloud roundtrip.
+
+For setup instructions, DNS details, and EEPROM safety notes, see [LOCAL_MQTT](docs/LOCAL_MQTT.md).
 
 ## Credits
 
