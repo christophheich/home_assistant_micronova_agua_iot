@@ -23,6 +23,60 @@
     "sync_clock": {
       "name": "Ofenuhr synchronisieren",
       "description": "Synchronisiert Uhrzeit und Datum des Ofens mit der aktuellen Uhrzeit und dem Datum von Home Assistant."
+    },
+    "set_chrono_program": {
+      "name": "Zeitprogramm einstellen",
+      "description": "Konfiguriert ein automatisches Zeitprogramm in einem einzigen Schreibvorgang zur Schonung des EEPROM-Speichers.",
+      "fields": {
+        "program": {
+          "name": "Programmnummer",
+          "description": "Programmnummer von 1 bis 6."
+        },
+        "enabled": {
+          "name": "Aktiviert",
+          "description": "Programm aktivieren oder deaktivieren."
+        },
+        "start_time": {
+          "name": "Startzeit",
+          "description": "Einschaltzeit des Ofens (HH:MM)."
+        },
+        "stop_time": {
+          "name": "Stoppzeit",
+          "description": "Ausschaltzeit des Ofens (HH:MM)."
+        },
+        "monday": {
+          "name": "Montag",
+          "description": "Ausführung am Montag."
+        },
+        "tuesday": {
+          "name": "Dienstag",
+          "description": "Ausführung am Dienstag."
+        },
+        "wednesday": {
+          "name": "Mittwoch",
+          "description": "Ausführung am Mittwoch."
+        },
+        "thursday": {
+          "name": "Donnerstag",
+          "description": "Ausführung am Donnerstag."
+        },
+        "friday": {
+          "name": "Freitag",
+          "description": "Ausführung am Freitag."
+        },
+        "saturday": {
+          "name": "Samstag",
+          "description": "Ausführung am Samstag."
+        },
+        "sunday": {
+          "name": "Sonntag",
+          "description": "Ausführung am Sonntag."
+        }
+      }
+    },
+    "refresh_chrono": {
+      "name": "Zeitprogramme aktualisieren",
+      "description": "Liest alle Zeitprogramme direkt aus dem Ofen aus."
     }
   },
   "options": {
@@ -52,9 +106,9 @@
   "selector": {
     "connection_mode": {
       "options": {
-      "connection_cloud": "Cloud (Micronova API)",
-      "connection_bluetooth": "Bluetooth (auto-detect)",
-      "connection_local_mqtt": "Lokales MQTT (Navel 2.0 Wi-Fi)"
+        "connection_cloud": "Cloud (Micronova API)",
+        "connection_bluetooth": "Bluetooth (auto-detect)",
+        "connection_local_mqtt": "Lokales MQTT (Navel 2.0 Wi-Fi)"
       }
     }
   }

@@ -362,6 +362,54 @@ class LocalMqttAguaIOT:
 
         return copy.deepcopy(self._register_values)
 
+    async def fetch_chrono_registers(self, device: Device) -> dict[int, int]:
+        """Query chrono schedule registers from the stove in chunks."""
+        if not self._client_writer or self._client_writer.is_closing():
+            return copy.deepcopy(self._register_values)
+
+        register_map = device.export_register_map() or {}
+        chrono_offsets = sorted({
+            int(reg["offset"])
+            for key, reg in register_map.items()
+            if isinstance(reg, dict)
+            and "offset" in reg
+            and str(key).lower().startswith(ACTIVE_EEPROM_PREFIXES)
+        })
+        if not chrono_offsets:
+            return copy.deepcopy(self._register_values)
+
+        chunk_size = 20
+        target_mac = self._device_mac or self._clean_identifier(device.product_serial) or "UNKNOWN"
+
+        for i in range(0, len(chrono_offsets), chunk_size):
+            chunk = chrono_offsets[i : i + chunk_size]
+            self._response_event.clear()
+            masks = [65535] * len(chunk)
+            query = {
+                "mi": str(uuid.uuid4()),
+                "mt": "Q",
+                "r": {"rj": "Navel"},
+                "s": {"ss": "Apk", "sj": self._session_uuid},
+                "pl": {
+                    "Cmd": "RequestReading",
+                    "Items": chunk,
+                    "Masks": masks,
+                },
+            }
+            try:
+                await self._send_mqtt_publish(f"navel/{target_mac}", query)
+                await asyncio.wait_for(
+                    self._response_event.wait(),
+                    timeout=min(float(self.buffer_read_timeout), 4.0),
+                )
+            except asyncio.TimeoutError:
+                _LOGGER.debug("Timeout waiting for chrono registers chunk %s", chunk)
+            except Exception as err:
+                _LOGGER.warning("Error requesting chrono registers from stove: %s", err)
+            await asyncio.sleep(0.1)
+
+        return copy.deepcopy(self._register_values)
+
     async def _request_writing(self, device: Device, payload_or_items: dict[str, Any]) -> None:
         """Send register write command to stove with EEPROM wear protection."""
         if not self._client_writer or self._client_writer.is_closing():
@@ -579,6 +627,7 @@ class LocalMqttAguaIOT:
                                 await asyncio.sleep(0.2)
                                 if self.devices:
                                     await self._fetch_device_information(self.devices[0])
+                                    await self.fetch_chrono_registers(self.devices[0])
 
                         # Stove Ping keepalive
                         if cmd_val == "Ping" and obj.get("mt") == "C":

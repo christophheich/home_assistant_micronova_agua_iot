@@ -19,6 +19,16 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
+try:
+    from homeassistant.components.time import TimeEntityDescription
+except ImportError:
+    @dataclass
+    class TimeEntityDescription:  # type: ignore[no-redef]
+        key: str = ""
+        name: str | None = None
+        icon: str | None = None
+        entity_category: Any = None
+
 from homeassistant.components.switch import (
     SwitchDeviceClass,
     SwitchEntityDescription,
@@ -46,6 +56,11 @@ class AguaIOTSensorEntityDescription(SensorEntityDescription):
     hybrid_only: bool = False
     hybrid_exclude: bool = False
     raw_value: bool = False
+
+
+@dataclass
+class AguaIOTTimeEntityDescription(TimeEntityDescription):
+    pass
 
 
 @dataclass
@@ -128,6 +143,7 @@ PLATFORMS = [
     Platform.SWITCH,
     Platform.NUMBER,
     Platform.SELECT,
+    Platform.TIME,
 ]
 
 ENDPOINTS = {
@@ -616,6 +632,17 @@ SENSORS = (
     ),
 )
 
+CHRONO_PROGRAM_COUNT = 6
+CHRONO_DAYS = (
+    ("monday", "Monday"),
+    ("tuesday", "Tuesday"),
+    ("wednesday", "Wednesday"),
+    ("thursday", "Thursday"),
+    ("friday", "Friday"),
+    ("saturday", "Saturday"),
+    ("sunday", "Sunday"),
+)
+
 SWITCHES = (
     SwitchEntityDescription(
         key="natural_mode_manual_set",
@@ -652,6 +679,36 @@ SWITCHES = (
         name="Sleep Mode",
         icon="mdi:sleep",
         device_class=SwitchDeviceClass.SWITCH,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    *(
+        SwitchEntityDescription(
+            key=f"chrono_p{p}_enable_set",
+            name=f"Program {p}",
+            icon="mdi:calendar-clock",
+        )
+        for p in range(1, CHRONO_PROGRAM_COUNT + 1)
+    ),
+    *(
+        SwitchEntityDescription(
+            key=f"chrono_p{p}_day_{day_key}_set",
+            name=f"Program {p} {day_name}",
+            icon="mdi:calendar-check",
+            entity_category=EntityCategory.CONFIG,
+        )
+        for p in range(1, CHRONO_PROGRAM_COUNT + 1)
+        for day_key, day_name in CHRONO_DAYS
+    ),
+    SwitchEntityDescription(
+        key="chrono_general_enable_set",
+        name="Chrono Master",
+        icon="mdi:calendar-sync",
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SwitchEntityDescription(
+        key="chrono_week_enable_set",
+        name="Chrono Weekly",
+        icon="mdi:calendar-week",
         entity_category=EntityCategory.CONFIG,
     ),
 )
@@ -795,4 +852,23 @@ SELECTS = (
         name="Fan Mode",
         icon="mdi:fan",
     ),
+)
+
+TIME_ENTITIES = tuple(
+    item
+    for p in range(1, CHRONO_PROGRAM_COUNT + 1)
+    for item in (
+        AguaIOTTimeEntityDescription(
+            key=f"chrono_p{p}_start_set",
+            name=f"Program {p} Start Time",
+            icon="mdi:clock-start",
+            entity_category=EntityCategory.CONFIG,
+        ),
+        AguaIOTTimeEntityDescription(
+            key=f"chrono_p{p}_stop_set",
+            name=f"Program {p} Stop Time",
+            icon="mdi:clock-end",
+            entity_category=EntityCategory.CONFIG,
+        ),
+    )
 )

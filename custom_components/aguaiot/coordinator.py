@@ -73,6 +73,7 @@ class AguaIOTDataUpdateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=update_interval),
             config_entry=config_entry,
         )
+        self._chrono_loaded = False
 
         """Set up AguaIOT entry."""
         api_url = config_entry.data[CONF_API_URL]
@@ -177,6 +178,14 @@ class AguaIOTDataUpdateCoordinator(DataUpdateCoordinator):
         """Get the latest data."""
         try:
             await self.agua.update()
+            if not self._chrono_loaded:
+                for dev in self.agua.devices:
+                    if hasattr(dev, "fetch_chrono_registers"):
+                        try:
+                            await dev.fetch_chrono_registers()
+                        except Exception as err:
+                            _LOGGER.debug("Initial chrono fetch deferred: %s", err)
+                self._chrono_loaded = True
             await self._async_persist_ble_bootstrap_if_needed()
         except AguaIOTUpdateError as e:
             # Raising here marks the update as failed. During the first
@@ -190,6 +199,13 @@ class AguaIOTDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Agua IOT Connection error: {e}") from e
         except AguaIOTError as e:
             raise UpdateFailed(f"Agua IOT error: {e}") from e
+
+    async def async_refresh_chrono(self) -> None:
+        """Force refresh of chrono schedule registers."""
+        for dev in self.agua.devices:
+            if hasattr(dev, "fetch_chrono_registers"):
+                await dev.fetch_chrono_registers()
+        await self.async_request_refresh()
 
     async def _async_persist_ble_bootstrap_if_needed(self) -> None:
         """Persist bootstrap data when it is freshly learned from the cloud."""

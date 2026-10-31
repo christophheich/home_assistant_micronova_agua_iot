@@ -517,6 +517,12 @@ class Device:
         raw_data = await self.__aguaiot._fetch_device_information(self)
         self.__register_dict = self.__build_register_dict(raw_data)
 
+    async def fetch_chrono_registers(self):
+        """Fetch chrono schedule registers from the backend transport."""
+        if hasattr(self.__aguaiot, "fetch_chrono_registers"):
+            raw_data = await self.__aguaiot.fetch_chrono_registers(self)
+            self.__register_dict.update(self.__build_register_dict(raw_data))
+
     def __build_register_dict(self, raw_data):
         register_dict = {}
         for key, register in self.__register_map_dict.items():
@@ -581,7 +587,7 @@ class Device:
                 f"Raw value must be between {set_min} and {set_max}: {value}"
             )
 
-        if self.__register_map_dict[item]["is_hex"]:
+        if self.__register_map_dict[item].get("is_hex"):
             value = int(f"0x{value}", 16)
 
         return value

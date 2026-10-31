@@ -2,3 +2,64 @@ sync_clock:
   target:
     entity:
       domain: climate
+
+set_chrono_program:
+  target:
+    entity:
+      domain: climate
+  fields:
+    program:
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 6
+          mode: box
+    enabled:
+      required: false
+      selector:
+        boolean:
+    start_time:
+      required: false
+      example: "06:30"
+      selector:
+        time:
+    stop_time:
+      required: false
+      example: "08:00"
+      selector:
+        time:
+    monday:
+      required: false
+      selector:
+        boolean:
+    tuesday:
+      required: false
+      selector:
+        boolean:
+    wednesday:
+      required: false
+      selector:
+        boolean:
+    thursday:
+      required: false
+      selector:
+        boolean:
+    friday:
+      required: false
+      selector:
+        boolean:
+    saturday:
+      required: false
+      selector:
+        boolean:
+    sunday:
+      required: false
+      selector:
+        boolean:
+
+refresh_chrono:
+  target:
+    entity:
+      domain: climate

@@ -21,6 +21,8 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
 )
+import voluptuous as vol
+from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt
 
 from .aguaiot import AguaIOTError
@@ -102,6 +104,28 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         "sync_clock",
         {},
         "sync_clock",
+    )
+    platform.async_register_entity_service(
+        "set_chrono_program",
+        {
+            vol.Required("program"): vol.All(vol.Coerce(int), vol.Range(min=1, max=6)),
+            vol.Optional("enabled"): cv.boolean,
+            vol.Optional("start_time"): cv.string,
+            vol.Optional("stop_time"): cv.string,
+            vol.Optional("monday"): cv.boolean,
+            vol.Optional("tuesday"): cv.boolean,
+            vol.Optional("wednesday"): cv.boolean,
+            vol.Optional("thursday"): cv.boolean,
+            vol.Optional("friday"): cv.boolean,
+            vol.Optional("saturday"): cv.boolean,
+            vol.Optional("sunday"): cv.boolean,
+        },
+        "async_set_chrono_program",
+    )
+    platform.async_register_entity_service(
+        "refresh_chrono",
+        {},
+        "async_refresh_chrono",
     )
 
 
@@ -401,6 +425,71 @@ class AguaIOTAirDevice(AguaIOTClimateDevice):
             )
         except (ValueError, AguaIOTError) as err:
             _LOGGER.error("Failed to set value, error: %s", err)
+
+    async def async_set_chrono_program(
+        self,
+        program: int,
+        enabled: bool | None = None,
+        start_time: str | None = None,
+        stop_time: str | None = None,
+        monday: bool | None = None,
+        tuesday: bool | None = None,
+        wednesday: bool | None = None,
+        thursday: bool | None = None,
+        friday: bool | None = None,
+        saturday: bool | None = None,
+        sunday: bool | None = None,
+    ) -> None:
+        """Configure an automatic schedule program in a single atomic EEPROM write."""
+        items: dict[str, int] = {}
+
+        if enabled is not None:
+            items[f"chrono_p{program}_enable_set"] = 1 if enabled else 0
+
+        def _time_str_to_units(val_str: str) -> int:
+            parts = [int(p.strip()) for p in val_str.split(":")]
+            h = parts[0]
+            m = parts[1] if len(parts) > 1 else 0
+            return max(0, min(144, round((h * 60 + m) / 10)))
+
+        if start_time is not None:
+            items[f"chrono_p{program}_start_set"] = _time_str_to_units(start_time)
+
+        if stop_time is not None:
+            items[f"chrono_p{program}_stop_set"] = _time_str_to_units(stop_time)
+
+        days = {
+            "monday": monday,
+            "tuesday": tuesday,
+            "wednesday": wednesday,
+            "thursday": thursday,
+            "friday": friday,
+            "saturday": saturday,
+            "sunday": sunday,
+        }
+        for day_name, day_val in days.items():
+            if day_val is not None:
+                items[f"chrono_p{program}_day_{day_name}_set"] = 1 if day_val else 0
+
+        valid_items = {k: v for k, v in items.items() if k in self._device.registers}
+        if not valid_items:
+            _LOGGER.warning("No valid chrono registers found for program %s", program)
+            return
+
+        try:
+            await self._device.set_register_values(valid_items, limit_value_raw=True)
+            await self.coordinator.async_request_refresh()
+        except (ValueError, AguaIOTError) as err:
+            _LOGGER.error("Failed to update chrono program %s: %s", program, err)
+
+    async def async_refresh_chrono(self) -> None:
+        """Query and reload chrono schedule registers from the stove."""
+        try:
+            if hasattr(self._device, "fetch_chrono_registers"):
+                await self._device.fetch_chrono_registers()
+            await self.coordinator.async_request_refresh()
+        except Exception as err:
+            _LOGGER.error("Failed to refresh chrono schedules: %s", err)
 
 
 class AguaIOTWaterDevice(AguaIOTClimateDevice):

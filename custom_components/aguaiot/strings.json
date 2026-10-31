@@ -27,6 +27,60 @@
     "sync_clock": {
       "name": "Synchronize Stove Clock",
       "description": "Synchronize stove time and date with the current Home Assistant time and date."
+    },
+    "set_chrono_program": {
+      "name": "Set Schedule Program",
+      "description": "Configure an automatic schedule program in a single atomic write to avoid EEPROM wear.",
+      "fields": {
+        "program": {
+          "name": "Program slot",
+          "description": "Program number from 1 to 6."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "Enable or disable this program slot."
+        },
+        "start_time": {
+          "name": "Start time",
+          "description": "Schedule activation time (HH:MM)."
+        },
+        "stop_time": {
+          "name": "Stop time",
+          "description": "Schedule deactivation time (HH:MM)."
+        },
+        "monday": {
+          "name": "Monday",
+          "description": "Run on Mondays."
+        },
+        "tuesday": {
+          "name": "Tuesday",
+          "description": "Run on Tuesdays."
+        },
+        "wednesday": {
+          "name": "Wednesday",
+          "description": "Run on Wednesdays."
+        },
+        "thursday": {
+          "name": "Thursday",
+          "description": "Run on Thursdays."
+        },
+        "friday": {
+          "name": "Friday",
+          "description": "Run on Fridays."
+        },
+        "saturday": {
+          "name": "Saturday",
+          "description": "Run on Saturdays."
+        },
+        "sunday": {
+          "name": "Sunday",
+          "description": "Run on Sundays."
+        }
+      }
+    },
+    "refresh_chrono": {
+      "name": "Refresh Schedules",
+      "description": "Fetch all schedule program registers from the stove."
     }
   },
   "options": {
