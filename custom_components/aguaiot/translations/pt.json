@@ -72,7 +72,7 @@
           "allow_eeprom_writes": "Permitir escritas na EEPROM"
         },
         "data_description": {
-          "allow_eeprom_writes": "Ativado por predefinição. 15 comandos por hora e 50 por dia por salamandra, partilhados entre cloud, Bluetooth e MQTT local. Desative para bloquear estas escritas desta integração. Outros programas não ficam limitados."
+          "allow_eeprom_writes": "Ativado por predefinição. 15 comandos por hora e 50 por dia por salamandra, partilhados entre cloud, Bluetooth e MQTT local. Uma falha na cloud ou no Bluetooth devolve essa contagem. Um envio MQTT local mantém a contagem. Desative para bloquear estas escritas desta integração. Outros programas não ficam limitados."
         }
       }
     },

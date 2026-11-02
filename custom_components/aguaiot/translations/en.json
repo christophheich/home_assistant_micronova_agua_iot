@@ -72,7 +72,7 @@
           "allow_eeprom_writes": "Allow EEPROM writes"
         },
         "data_description": {
-          "allow_eeprom_writes": "On by default. 15 commands per hour and 50 per day per stove, shared by cloud, Bluetooth and local MQTT. Turn off to block those writes from this integration. Other programs are not limited."
+          "allow_eeprom_writes": "On by default. 15 commands per hour and 50 per day per stove, shared by cloud, Bluetooth and local MQTT. A failed cloud or Bluetooth write gives that count back. A local MQTT send keeps it. Turn off to block those writes from this integration. Other programs are not limited."
         }
       }
     },

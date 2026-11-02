@@ -32,7 +32,8 @@ def budget_env(monkeypatch, tmp_path):
 
     monkeypatch.setattr(eeprom, "Store", FakeStore)
     now = [100000.0]
-    monkeypatch.setattr(eeprom.time, "time", lambda: now[0])
+    # + 0.0 copies the value into a new float, as time.time() does.
+    monkeypatch.setattr(eeprom.time, "time", lambda: now[0] + 0.0)
     hass = SimpleNamespace(async_add_executor_job=execute)
     return hass, now
 
@@ -112,6 +113,43 @@ async def test_old_mqtt_history_still_counts(budget_env):
         await eeprom.reserve_eeprom_write(
             hass, "DEV_01", [32768], legacy_id="AABBCCDDEEFF"
         )
+
+
+@pytest.mark.asyncio
+async def test_release_returns_one_slot_at_the_hourly_cap(budget_env):
+    hass, _ = budget_env
+    guard = eeprom.EepromBudget(hass, "one")
+    stamps = [await guard.reserve() for _ in range(15)]
+    with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
+        await guard.reserve()
+    await guard.release(stamps[0])
+    await guard.reserve()
+    await guard.release(stamps[0])
+    await guard.release(None)
+    with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
+        await guard.reserve()
+    assert any(value is stamps[1] for value in guard.history)
+    assert all(value is not stamps[0] for value in guard.history)
+    assert len(guard.history) == 15
+
+
+@pytest.mark.asyncio
+async def test_failed_release_keeps_the_reservation(budget_env, monkeypatch):
+    hass, _ = budget_env
+    hass.data = {}
+    device = SimpleNamespace(id_device="DEV_01", product_serial="AABBCCDDEEFF")
+    stamp = await eeprom.reserve_device_write(hass, device, [32768], {})
+    budget = hass.data["aguaiot"]["eeprom_budgets"]["DEV_01"]
+
+    async def boom(_data):
+        raise OSError("disk")
+
+    monkeypatch.setattr(budget.store, "async_save", boom)
+    with pytest.raises(OSError):
+        await budget.release(stamp)
+    assert any(value is stamp for value in budget.history)
+    await eeprom.release_device_write(hass, device, stamp)
+    assert any(value is stamp for value in budget.history)
 
 
 @pytest.mark.asyncio

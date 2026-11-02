@@ -15,7 +15,7 @@ Application write confirmations are an optional endpoint capability. Leave disab
 
 Normal polling reads RAM and cached setpoints. Write only registers that belong to this stove model.
 
-Offsets at or above 32768 are EEPROM. Those writes stay allowed. Each stove gets 15 commands per hour and 50 per day. Cloud, Bluetooth and local MQTT share that count. One command counts once, even when it changes several registers. The count is saved before the command is sent and kept across restarts. A failed or uncertain send still counts. If the saved count cannot be read or updated, the write is blocked. RAM reads and RAM writes are free. Turn off "Allow EEPROM writes" in the stove's MQTT settings to block EEPROM writes from this integration. Other programs are not covered. Deleting the saved count is not a supported reset.
+Offsets at or above 32768 are EEPROM. Those writes stay allowed. Each stove gets 15 commands per hour and 50 per day. Cloud, Bluetooth and local MQTT share that count. One command counts once, even when it changes several registers. The count is saved before the command is sent and kept across restarts. Cloud and Bluetooth give a count back when the write fails. A local MQTT send keeps the count, including when delivery is uncertain. If the saved count cannot be read or updated, the write is blocked. RAM reads and RAM writes are free. Turn off "Allow EEPROM writes" in the stove's MQTT settings to block EEPROM writes from this integration. Other programs are not covered. Deleting the saved count is not a supported reset.
 
 The options interface supports English, German, French, Dutch and Portuguese. Generic MQTT connection settings contain no dependency on another custom integration.
 

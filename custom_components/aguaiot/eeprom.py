@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import math
 import time
 from pathlib import Path
@@ -9,6 +10,8 @@ from pathlib import Path
 from homeassistant.helpers.storage import Store
 
 from .aguaiot import AguaIOTError
+
+_LOGGER = logging.getLogger(__name__)
 
 HOURLY_LIMIT = 15
 DAILY_LIMIT = 50
@@ -42,7 +45,7 @@ def writes_allowed(device_options, device_id):
 
 
 class EepromBudget:
-    """Reserve before sending. Uncertain writes still consume the budget."""
+    """Reserve before sending. release() gives one reservation back."""
 
     def __init__(self, hass, stove_id, legacy_id=None):
         self.hass = hass
@@ -108,10 +111,30 @@ class EepromBudget:
                 self.history.append(now)
                 await self.store.async_save(self.history)
                 await self.hass.async_add_executor_job(self._verify, self.history)
+                return now
             except (OSError, ValueError, TypeError) as err:
                 raise AguaIOTError(
                     "Cannot verify the EEPROM write budget. No command was sent."
                 ) from err
+
+    async def release(self, stamp):
+        """Return one reservation after a write that did not land."""
+        async with self.lock:
+            if not self.history or stamp is None:
+                return
+            # Drop one object, so two reservations in the same second stay distinct.
+            updated = []
+            removed = False
+            for value in self.history:
+                if not removed and value is stamp:
+                    removed = True
+                    continue
+                updated.append(value)
+            if not removed:
+                return
+            await self.store.async_save(updated)
+            await self.hass.async_add_executor_job(self._verify, updated)
+            self.history = updated
 
 
 async def reserve_eeprom_write(
@@ -137,14 +160,28 @@ async def reserve_eeprom_write(
     if budget is None:
         budget = EepromBudget(hass, stove_id, legacy_id=legacy_id)
         budgets[stove_id] = budget
-    await budget.reserve()
+    return await budget.reserve()
+
+
+async def release_device_write(hass, device, stamp):
+    """Give a cloud or Bluetooth reservation back. Ignore a failed save."""
+    if stamp is None or hass is None:
+        return
+    stove_id = str(getattr(device, "id_device", "") or "")
+    budget = hass.data.get("aguaiot", {}).get("eeprom_budgets", {}).get(stove_id)
+    if budget is None:
+        return
+    try:
+        await budget.release(stamp)
+    except (OSError, ValueError, TypeError, AguaIOTError):
+        _LOGGER.debug("Could not return the EEPROM reservation for %s", stove_id)
 
 
 async def reserve_device_write(
     hass, device, offsets, device_options, explicit_mac=None
 ):
     """Apply the shared stove budget before a cloud, Bluetooth or MQTT write."""
-    await reserve_eeprom_write(
+    return await reserve_eeprom_write(
         hass,
         str(getattr(device, "id_device", "") or ""),
         offsets,

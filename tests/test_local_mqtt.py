@@ -460,6 +460,52 @@ async def test_ram_and_explicit_eeprom_opt_in(mqtt_api, offset, allowed):
 
 
 @pytest.mark.asyncio
+async def test_failed_mqtt_publish_keeps_the_eeprom_count(
+    mqtt_api, monkeypatch, tmp_path
+):
+    eeprom = load_component_module("eeprom")
+
+    class FakeStore:
+        def __init__(self, hass, version, key, **kwargs):
+            self.path = str(tmp_path / key)
+
+        async def async_load(self):
+            try:
+                with open(self.path) as source:  # noqa: ASYNC230 - tiny local test fixture
+                    return json.load(source)["data"]
+            except FileNotFoundError:
+                return None
+
+        async def async_save(self, data):
+            with open(self.path, "w") as target:  # noqa: ASYNC230 - tiny local test fixture
+                json.dump({"data": data}, target)
+
+    async def execute(fn, *args):
+        return fn(*args)
+
+    monkeypatch.setattr(eeprom, "Store", FakeStore)
+    budget = eeprom.EepromBudget(
+        SimpleNamespace(async_add_executor_job=execute), "DEV_01"
+    )
+    client = make_test_instance(cached_devices=make_dummy_cached_devices())
+    await client.connect()
+    client.hass.data = {"aguaiot": {"eeprom_budgets": {"DEV_01": budget}}}
+    mqtt_api.async_publish.reset_mock(side_effect=True)
+    mqtt_api.async_publish.side_effect = local_mqtt_module.HomeAssistantError("down")
+    try:
+        with pytest.raises(local_mqtt_module.AguaIOTConnectionError, match="publish"):
+            await client._request_writing(
+                client.devices[0],
+                {"Cmd": "RequestWriting", "Items": [32893], "Values": [23]},
+            )
+        assert len(budget.history) == 1
+        with open(budget.store.path) as saved:  # noqa: ASYNC230 - tiny local test fixture
+            assert json.load(saved)["data"] == budget.history
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_identity_during_subscription_can_be_answered(mqtt_api):
     client = make_test_instance(cached_devices=make_dummy_cached_devices())
 

@@ -446,46 +446,52 @@ class aguaiot:
             set_bits.append(8)
             set_endians.append("L")
 
-        from .eeprom import reserve_device_write
+        from .eeprom import release_device_write, reserve_device_write
 
-        await reserve_device_write(self.hass, device, set_items, self.device_options)
+        reservation = await reserve_device_write(
+            self.hass, device, set_items, self.device_options
+        )
 
-        payload = {
-            "id_device": device.id_device,
-            "id_product": device.id_product,
-            "Protocol": "RWMSmaster",
-            "BitData": set_bits,
-            "Endianess": set_endians,
-            "Items": set_items,
-            "Masks": set_masks,
-            "Values": set_values,
-        }
+        try:
+            payload = {
+                "id_device": device.id_device,
+                "id_product": device.id_product,
+                "Protocol": "RWMSmaster",
+                "BitData": set_bits,
+                "Endianess": set_endians,
+                "Items": set_items,
+                "Masks": set_masks,
+                "Values": set_values,
+            }
 
-        res = await self.handle_webcall("POST", url, payload)
-        if res is False:
-            raise AguaIOTError("Error while request device writing")
+            res = await self.handle_webcall("POST", url, payload)
+            if res is False:
+                raise AguaIOTError("Error while request device writing")
 
-        id_request = res["idRequest"]
+            id_request = res["idRequest"]
 
-        url = self.api_url + API_PATH_DEVICE_JOB_STATUS + id_request
+            url = self.api_url + API_PATH_DEVICE_JOB_STATUS + id_request
 
-        payload = {}
+            payload = {}
 
-        retry_count = 0
-        res = await self.handle_webcall("GET", url, payload)
-        while (
-            res is False or res["jobAnswerStatus"] != "completed"
-        ) and retry_count < 10:
-            await asyncio.sleep(1)
+            retry_count = 0
             res = await self.handle_webcall("GET", url, payload)
-            retry_count = retry_count + 1
+            while (
+                res is False or res["jobAnswerStatus"] != "completed"
+            ) and retry_count < 10:
+                await asyncio.sleep(1)
+                res = await self.handle_webcall("GET", url, payload)
+                retry_count = retry_count + 1
 
-        if (
-            res is False
-            or res["jobAnswerStatus"] != "completed"
-            or "Cmd" not in res["jobAnswerData"]
-        ):
-            raise AguaIOTError("Error while request device writing")
+            if (
+                res is False
+                or res["jobAnswerStatus"] != "completed"
+                or "Cmd" not in res["jobAnswerData"]
+            ):
+                raise AguaIOTError("Error while request device writing")
+        except Exception:
+            await release_device_write(self.hass, device, reservation)
+            raise
 
 
 class Device:

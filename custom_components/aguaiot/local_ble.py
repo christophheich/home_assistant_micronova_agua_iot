@@ -369,9 +369,11 @@ class LocalBleAguaIOT:
             bit_data.append(8)
             values.append(value)
 
-        from .eeprom import reserve_device_write
+        from .eeprom import release_device_write, reserve_device_write
 
-        await reserve_device_write(self.hass, device, item_offsets, self.device_options)
+        reservation = await reserve_device_write(
+            self.hass, device, item_offsets, self.device_options
+        )
 
         payload = {
             "Cmd": "RequestWriting",
@@ -383,11 +385,15 @@ class LocalBleAguaIOT:
             "Values": values,
         }
 
-        await self._run_authenticated_session(
-            device,
-            "writing stove registers",
-            lambda session: self._request_writing_session(session, payload),
-        )
+        try:
+            await self._run_authenticated_session(
+                device,
+                "writing stove registers",
+                lambda session: self._request_writing_session(session, payload),
+            )
+        except Exception:
+            await release_device_write(self.hass, device, reservation)
+            raise
 
     async def _validate_local_connection_session(
         self, session: _BleMicronovaSession

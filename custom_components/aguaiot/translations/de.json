@@ -72,7 +72,7 @@
           "allow_eeprom_writes": "EEPROM-Schreibzugriffe erlauben"
         },
         "data_description": {
-          "allow_eeprom_writes": "Standardmäßig an. 15 Befehle pro Stunde und 50 pro Tag je Ofen, gemeinsam für Cloud, Bluetooth und lokales MQTT. Aus sperrt diese Schreibzugriffe dieser Integration. Andere Programme sind nicht begrenzt."
+          "allow_eeprom_writes": "Standardmäßig an. 15 Befehle pro Stunde und 50 pro Tag je Ofen, gemeinsam für Cloud, Bluetooth und lokales MQTT. Schlägt Cloud oder Bluetooth fehl, kommt der Zähler zurück. Lokales MQTT behält ihn. Aus sperrt diese Schreibzugriffe dieser Integration. Andere Programme sind nicht begrenzt."
         }
       }
     },
