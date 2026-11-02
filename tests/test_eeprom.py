@@ -49,6 +49,10 @@ async def test_hourly_limit_restart_and_stove_isolation(budget_env):
         await restarted.reserve()
     await eeprom.EepromBudget(hass, "two").reserve()
     now[0] += 3600
+    # The hour is open again. Fill the rest of the day, one command per hour.
+    for _ in range(eeprom.DAILY_LIMIT - eeprom.HOURLY_LIMIT):
+        await restarted.reserve()
+        now[0] += 3600
     with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
         await restarted.reserve()
     now[0] += 86400
@@ -59,14 +63,15 @@ async def test_hourly_limit_restart_and_stove_isolation(budget_env):
 async def test_daily_limit_and_clock_rollback(budget_env):
     hass, now = budget_env
     guard = eeprom.EepromBudget(hass, "one")
-    await guard.reserve()
-    now[0] += 3600
+    for _ in range(eeprom.DAILY_LIMIT):
+        await guard.reserve()
+        now[0] += 3600
     with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
         await guard.reserve()
     now[0] -= 20000
     with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
         await guard.reserve()
-    now[0] += 110000
+    now[0] += 86400 + 20000
     await guard.reserve()
 
 
@@ -94,10 +99,11 @@ async def test_ram_write_ignores_the_block_and_the_budget(budget_env):
 
 @pytest.mark.asyncio
 async def test_cloud_and_mqtt_share_one_stove_budget(budget_env):
-    hass, _ = budget_env
+    hass, now = budget_env
     hass.data = {}
     for _ in range(eeprom.DAILY_LIMIT):
         await eeprom.reserve_eeprom_write(hass, "DEV_01", [32768])
+        now[0] += 3600
     with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
         await eeprom.reserve_eeprom_write(
             hass, "DEV_01", [32768], legacy_id="AABBCCDDEEFF"

@@ -13,9 +13,10 @@ from .aguaiot import AguaIOTError
 
 _LOGGER = logging.getLogger(__name__)
 
-# 1 per day keeps a 10,000-cycle cell past a 20-year stove life.
-HOURLY_LIMIT = 1
-DAILY_LIMIT = 1
+# About 32,000 cycles is the middle of the usual 10,000 to 100,000 range.
+# 5 per day lasts about 17.5 years there. 3 per hour stays under that daily cap.
+HOURLY_LIMIT = 3
+DAILY_LIMIT = 5
 EEPROM_OFFSET_THRESHOLD = 32768
 
 
@@ -107,7 +108,8 @@ class EepromBudget:
                 ):
                     raise AguaIOTError(
                         "EEPROM write limit reached for this stove. "
-                        f"The limit is {DAILY_LIMIT} command per day. Try again later."
+                        f"The limit is {HOURLY_LIMIT} commands per hour and "
+                        f"{DAILY_LIMIT} commands per day. Try again later."
                     )
                 self.history.append(now)
                 await self.store.async_save(self.history)

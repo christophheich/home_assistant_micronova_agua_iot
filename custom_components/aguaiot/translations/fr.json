@@ -72,7 +72,7 @@
           "allow_eeprom_writes": "Autoriser les écritures EEPROM"
         },
         "data_description": {
-          "allow_eeprom_writes": "Activé par défaut. 1 commande par jour et par poêle, partagée entre cloud, Bluetooth et MQTT local. Cloud et Bluetooth recréditent le quota en cas d'échec. MQTT le recrédite seulement si la commande n'est pas partie. Désactivez pour bloquer ces écritures de cette intégration."
+          "allow_eeprom_writes": "Activé par défaut. 3 commandes par heure et 5 commandes par jour et par poêle, partagées entre cloud, Bluetooth et MQTT local. Cloud et Bluetooth recréditent le quota en cas d'échec. MQTT le recrédite seulement si la commande n'est pas partie. Désactivez pour bloquer ces écritures de cette intégration."
         }
       }
     },

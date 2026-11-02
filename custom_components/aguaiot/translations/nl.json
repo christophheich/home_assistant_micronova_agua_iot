@@ -72,7 +72,7 @@
           "allow_eeprom_writes": "EEPROM-schrijfacties toestaan"
         },
         "data_description": {
-          "allow_eeprom_writes": "Standaard aan. 1 opdracht per dag per kachel, gedeeld door cloud, Bluetooth en lokale MQTT. Cloud en Bluetooth geven de telling terug als het schrijven mislukt. MQTT geeft die alleen terug als de opdracht niet is verzonden. Uitschakelen blokkeert deze schrijfacties van deze integratie."
+          "allow_eeprom_writes": "Standaard aan. 3 opdrachten per uur en 5 opdrachten per dag per kachel, gedeeld door cloud, Bluetooth en lokale MQTT. Cloud en Bluetooth geven de telling terug als het schrijven mislukt. MQTT geeft die alleen terug als de opdracht niet is verzonden. Uitschakelen blokkeert deze schrijfacties van deze integratie."
         }
       }
     },
