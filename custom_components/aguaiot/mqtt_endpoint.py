@@ -1,4 +1,4 @@
-"""MQTT client for a configured MQTT endpoint."""
+"""Broker connection for a stove that has its own hostname."""
 
 from __future__ import annotations
 
@@ -18,11 +18,11 @@ _LOGGER = logging.getLogger(__name__)
 RECONNECT_DELAY = 2
 
 
-class MqttClient:
-    """Expose the same small client interface as Home Assistant MQTT.
+class MqttEndpoint:
+    """Same calls as Home Assistant MQTT: subscribe, publish, is_connected.
 
-    Connection settings are supplied per device. This client opens no listener.
-    Optional application receipts are opt-in for endpoints supporting them.
+    local_mqtt uses this only when the stove options contain a hostname.
+    With an empty host, that module calls Home Assistant MQTT directly.
     """
 
     def __init__(

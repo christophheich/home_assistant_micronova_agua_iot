@@ -1,4 +1,9 @@
-"""Local MQTT transport for Micronova Navel 2.0 Wi-Fi modules."""
+"""Navel stove session over MQTT topics.
+
+Same role as local_ble.py. It reads and writes stove registers.
+Home Assistant MQTT carries the traffic, unless the stove options name a hostname.
+In that case mqtt_endpoint.py opens the connection. Nothing in here binds a port.
+"""
 
 from __future__ import annotations
 
@@ -34,7 +39,7 @@ class LocalMqttSetupError(AguaIOTConnectionError):
 
 
 class LocalMqttAguaIOT:
-    """Micronova transport using Home Assistant's MQTT client for Navel modules."""
+    """One stove session. Publishes Navel commands and stores the answers."""
 
     def __init__(
         self,
@@ -338,14 +343,14 @@ class LocalMqttAguaIOT:
                 "invalid_mac", "Configure the stove Wi-Fi MAC address."
             )
         if settings.get("hostname"):
-            from .mqtt_client import MqttClient
+            from .mqtt_endpoint import MqttEndpoint
 
             info = {
                 key: settings[key]
                 for key in ("hostname", "port", "username", "password")
                 if key in settings
             }
-            self._mqtt = MqttClient(
+            self._mqtt = MqttEndpoint(
                 self.hass,
                 info,
                 self._on_mqtt_reconnect,

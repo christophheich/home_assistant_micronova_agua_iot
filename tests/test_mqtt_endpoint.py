@@ -9,7 +9,7 @@ import pytest
 
 from tests.helpers import load_component_module
 
-module = load_component_module("mqtt_client")
+module = load_component_module("mqtt_endpoint")
 
 
 class FakeClient:
@@ -36,7 +36,7 @@ class FakeClient:
 async def test_client_dispatch_and_clean_close(monkeypatch):
     raw = FakeClient()
     monkeypatch.setattr(module.aiomqtt, "Client", MagicMock(return_value=raw))
-    adapter = module.MqttClient(MagicMock(), {"hostname": "127.0.0.1"}, AsyncMock())
+    adapter = module.MqttEndpoint(MagicMock(), {"hostname": "127.0.0.1"}, AsyncMock())
     callback = AsyncMock()
     await adapter.start()
     unsubscribe = await adapter.async_subscribe(None, "navel/AABBCCDDEEFF", callback)
@@ -67,7 +67,7 @@ async def test_reconnect_resubscribes_and_reauthenticates(monkeypatch):
     )
     monkeypatch.setattr(module, "RECONNECT_DELAY", 0.01)
     on_reconnect = AsyncMock()
-    adapter = module.MqttClient(MagicMock(), {}, on_reconnect)
+    adapter = module.MqttEndpoint(MagicMock(), {}, on_reconnect)
     await adapter.start()
     await adapter.async_subscribe(None, "navel/AABBCCDDEEFF", AsyncMock())
     await first.queue.put(aiomqtt.MqttError("connection lost"))
@@ -90,7 +90,7 @@ async def test_failed_reauthentication_retries_without_losing_reader(monkeypatch
     )
     monkeypatch.setattr(module, "RECONNECT_DELAY", 0.001)
     on_reconnect = AsyncMock(side_effect=[module.AguaIOTError("publish failed"), None])
-    adapter = module.MqttClient(MagicMock(), {}, on_reconnect)
+    adapter = module.MqttEndpoint(MagicMock(), {}, on_reconnect)
     callback = AsyncMock()
     try:
         await adapter.start()
@@ -118,7 +118,7 @@ async def test_endpoint_denial_reaches_control_caller(monkeypatch):
 
     raw = FakeClient()
     monkeypatch.setattr(module.aiomqtt, "Client", MagicMock(return_value=raw))
-    adapter = module.MqttClient(MagicMock(), {}, AsyncMock(), write_confirmation=True)
+    adapter = module.MqttEndpoint(MagicMock(), {}, AsyncMock(), write_confirmation=True)
     await adapter.start()
     task = asyncio.create_task(
         adapter.async_publish(
@@ -162,7 +162,7 @@ async def test_endpoint_denial_reaches_control_caller(monkeypatch):
 async def test_invalid_write_id_is_rejected_before_publish(message_id):
     import json
 
-    adapter = module.MqttClient(MagicMock(), {}, AsyncMock(), write_confirmation=True)
+    adapter = module.MqttEndpoint(MagicMock(), {}, AsyncMock(), write_confirmation=True)
     adapter._client = FakeClient()
     with pytest.raises(module.HomeAssistantError, match="message ID"):
         await adapter.async_publish(
@@ -183,7 +183,7 @@ async def test_pending_write_fails_promptly_on_disconnect_or_close(
 
     raw = FakeClient()
     monkeypatch.setattr(module.aiomqtt, "Client", MagicMock(return_value=raw))
-    adapter = module.MqttClient(MagicMock(), {}, AsyncMock(), write_confirmation=True)
+    adapter = module.MqttEndpoint(MagicMock(), {}, AsyncMock(), write_confirmation=True)
     await adapter.start()
     task = asyncio.create_task(
         adapter.async_publish(
@@ -213,7 +213,7 @@ async def test_standard_broker_does_not_require_custom_write_receipts():
     import json
 
     raw = FakeClient()
-    adapter = module.MqttClient(MagicMock(), {}, AsyncMock())
+    adapter = module.MqttEndpoint(MagicMock(), {}, AsyncMock())
     adapter._client = raw
     await adapter.async_publish(
         None,
