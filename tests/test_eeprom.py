@@ -42,13 +42,16 @@ def budget_env(monkeypatch, tmp_path):
 async def test_hourly_limit_restart_and_stove_isolation(budget_env):
     hass, now = budget_env
     guard = eeprom.EepromBudget(hass, "one")
-    for _ in range(15):
+    for _ in range(eeprom.HOURLY_LIMIT):
         await guard.reserve()
     restarted = eeprom.EepromBudget(hass, "one")
     with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
         await restarted.reserve()
     await eeprom.EepromBudget(hass, "two").reserve()
     now[0] += 3600
+    with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
+        await restarted.reserve()
+    now[0] += 86400
     await restarted.reserve()
 
 
@@ -56,10 +59,8 @@ async def test_hourly_limit_restart_and_stove_isolation(budget_env):
 async def test_daily_limit_and_clock_rollback(budget_env):
     hass, now = budget_env
     guard = eeprom.EepromBudget(hass, "one")
-    for _ in range(5):
-        for _ in range(10):
-            await guard.reserve()
-        now[0] += 3600
+    await guard.reserve()
+    now[0] += 3600
     with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
         await guard.reserve()
     now[0] -= 20000
@@ -95,7 +96,7 @@ async def test_ram_write_ignores_the_block_and_the_budget(budget_env):
 async def test_cloud_and_mqtt_share_one_stove_budget(budget_env):
     hass, _ = budget_env
     hass.data = {}
-    for _ in range(15):
+    for _ in range(eeprom.DAILY_LIMIT):
         await eeprom.reserve_eeprom_write(hass, "DEV_01", [32768])
     with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
         await eeprom.reserve_eeprom_write(
@@ -116,10 +117,12 @@ async def test_old_mqtt_history_still_counts(budget_env):
 
 
 @pytest.mark.asyncio
-async def test_release_returns_one_slot_at_the_hourly_cap(budget_env):
+async def test_release_returns_one_slot_at_the_hourly_cap(budget_env, monkeypatch):
+    monkeypatch.setattr(eeprom, "HOURLY_LIMIT", 2)
+    monkeypatch.setattr(eeprom, "DAILY_LIMIT", 2)
     hass, _ = budget_env
     guard = eeprom.EepromBudget(hass, "one")
-    stamps = [await guard.reserve() for _ in range(15)]
+    stamps = [await guard.reserve() for _ in range(2)]
     with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
         await guard.reserve()
     await guard.release(stamps[0])
@@ -130,7 +133,7 @@ async def test_release_returns_one_slot_at_the_hourly_cap(budget_env):
         await guard.reserve()
     assert any(value is stamps[1] for value in guard.history)
     assert all(value is not stamps[0] for value in guard.history)
-    assert len(guard.history) == 15
+    assert len(guard.history) == 2
 
 
 @pytest.mark.asyncio

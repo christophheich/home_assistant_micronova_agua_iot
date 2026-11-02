@@ -460,7 +460,7 @@ async def test_ram_and_explicit_eeprom_opt_in(mqtt_api, offset, allowed):
 
 
 @pytest.mark.asyncio
-async def test_failed_mqtt_publish_keeps_the_eeprom_count(
+async def test_failed_mqtt_publish_returns_the_eeprom_count(
     mqtt_api, monkeypatch, tmp_path
 ):
     eeprom = load_component_module("eeprom")
@@ -494,6 +494,15 @@ async def test_failed_mqtt_publish_keeps_the_eeprom_count(
     mqtt_api.async_publish.side_effect = local_mqtt_module.HomeAssistantError("down")
     try:
         with pytest.raises(local_mqtt_module.AguaIOTConnectionError, match="publish"):
+            await client._request_writing(
+                client.devices[0],
+                {"Cmd": "RequestWriting", "Items": [32893], "Values": [23]},
+            )
+        assert budget.history == []
+        mqtt_api.async_publish.side_effect = local_mqtt_module.HomeAssistantError(
+            "Delivery is uncertain. The command was not retried."
+        )
+        with pytest.raises(local_mqtt_module.AguaIOTConnectionError, match="uncertain"):
             await client._request_writing(
                 client.devices[0],
                 {"Cmd": "RequestWriting", "Items": [32893], "Values": [23]},

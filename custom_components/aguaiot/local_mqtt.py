@@ -23,9 +23,20 @@ from .aguaiot import (
     aguaiot,
     update_devices,
 )
-from .eeprom import EEPROM_OFFSET_THRESHOLD, clean_mac, reserve_device_write
+from .eeprom import (
+    EEPROM_OFFSET_THRESHOLD,
+    clean_mac,
+    release_device_write,
+    reserve_device_write,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _delivery_uncertain(err):
+    """True when the command may already have reached the stove."""
+    return "uncertain" in str(err).lower()
+
 
 ACTIVE_EEPROM_PREFIXES = ("chrono_p",)
 
@@ -521,7 +532,7 @@ class LocalMqttAguaIOT:
             or "UNKNOWN"
         )
         async with self._write_lock:
-            await reserve_device_write(
+            reservation = await reserve_device_write(
                 self.hass,
                 device,
                 item_offsets,
@@ -536,7 +547,12 @@ class LocalMqttAguaIOT:
                 "pl": payload,
             }
             _LOGGER.info("Sending RequestWriting to stove: %s", payload)
-            await self._send_mqtt_publish(f"navel/{target_mac}", cmd)
+            try:
+                await self._send_mqtt_publish(f"navel/{target_mac}", cmd)
+            except Exception as err:
+                if not _delivery_uncertain(err):
+                    await release_device_write(self.hass, device, reservation)
+                raise
             # Optimistically update cached register values so UI reflects changes immediately
             for idx, off in enumerate(item_offsets):
                 if idx < len(payload.get("Values", [])):
