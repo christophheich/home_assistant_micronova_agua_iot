@@ -9,6 +9,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import AguaIOTDataUpdateCoordinator
+from .stoves import attach_stove_devices, ensure_stove_subentries
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -26,6 +27,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up AguaIOT entry."""
+    ensure_stove_subentries(hass, config_entry)
     coordinator = AguaIOTDataUpdateCoordinator(
         hass=hass,
         config_entry=config_entry,
@@ -35,6 +37,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     try:
         await coordinator.async_config_entry_first_refresh()
         await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
+        attach_stove_devices(hass, config_entry)
     except (Exception, asyncio.CancelledError):
         # HA may retry setup with a new coordinator. Release this attempt's client.
         if hasattr(coordinator.agua, "close"):

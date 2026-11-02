@@ -32,6 +32,15 @@ async def test_direct_mqtt_settings_are_redacted():
                 }
             }
         },
+        "subentries": [
+            {
+                "data": {
+                    "hostname": "127.0.0.1",
+                    "username": "private-user",
+                    "password": "private-test-secret",
+                }
+            }
+        ],
     }
     result = await diagnostics.async_get_config_entry_diagnostics(MagicMock(), entry)
     assert "private-test-secret" not in str(result)

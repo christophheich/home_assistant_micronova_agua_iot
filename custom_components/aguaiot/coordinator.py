@@ -43,6 +43,7 @@ from .const import (
 )
 from .local_ble import DEFAULT_CHAR_UUID, DEFAULT_SERVICE_UUID, LocalBleAguaIOT
 from .local_mqtt import LocalMqttAguaIOT
+from .stoves import stove_settings_by_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ class AguaIOTDataUpdateCoordinator(DataUpdateCoordinator):
             "buffer_read_timeout": buffer_read_timeout,
         }
 
-        device_options = config_entry.options.get("mqtt_devices", {})
+        device_options = stove_settings_by_id(config_entry)
         if connection_mode == CONNECTION_MODE_BLUETOOTH:
             self.agua = LocalBleAguaIOT(
                 hass=hass,

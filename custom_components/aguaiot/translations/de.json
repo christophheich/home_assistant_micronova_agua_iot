@@ -30,8 +30,7 @@
       "user": {
         "title": "Micronova Agua IOT Optionen",
         "data": {
-          "connection_mode": "Verbindung",
-          "configure_mqtt": "MQTT pro Ofen konfigurieren"
+          "connection_mode": "Verbindung"
         },
         "sections": {
           "device_fixes": {
@@ -51,7 +50,7 @@
             }
           }
         },
-        "description": "Wähle Cloud, Bluetooth oder lokales MQTT."
+        "description": "Wähle Cloud, Bluetooth oder lokales MQTT. MQTT-Host, Port und EEPROM stellst du am Ofen ein."
       },
       "mqtt_device": {
         "title": "Ofen auswählen",
@@ -61,7 +60,7 @@
       },
       "mqtt_settings": {
         "title": "MQTT-Verbindung",
-        "description": "Host leer lassen, um Home Assistant MQTT zu nutzen. Ein leeres Passwort behält das gespeicherte Passwort bei. Schreibbestätigungen müssen vom Endpunkt unterstützt werden; bei normalen Brokern ausgeschaltet lassen.",
+        "description": "Host leer lassen, um Home Assistant MQTT zu nutzen. Ein leeres Passwort behält das gespeicherte Passwort bei. Schreibbestätigungen müssen vom Endpunkt unterstützt werden. Bei normalen Brokern ausgeschaltet lassen.",
         "data": {
           "device_mac": "WLAN-MAC-Adresse",
           "hostname": "MQTT-Host",
@@ -94,6 +93,46 @@
         "connection_cloud": "Cloud (Micronova API)",
         "connection_bluetooth": "Bluetooth",
         "connection_local_mqtt": "Lokales MQTT"
+      }
+    }
+  },
+  "config_subentries": {
+    "stove": {
+      "entry_type": "Ofen",
+      "initiate_flow": {
+        "user": "Ofen hinzufügen",
+        "reconfigure": "Verbindung und EEPROM"
+      },
+      "step": {
+        "user": {
+          "title": "Ofen auswählen",
+          "data": {
+            "device": "Ofen"
+          }
+        },
+        "reconfigure": {
+          "title": "Verbindung und EEPROM",
+          "description": "Host leer lassen, um Home Assistant MQTT zu nutzen. Ein leeres Passwort behält das gespeicherte Passwort bei. Schreibbestätigungen müssen vom Endpunkt unterstützt werden. Bei normalen Brokern ausgeschaltet lassen.",
+          "data": {
+            "device_mac": "WLAN-MAC-Adresse",
+            "hostname": "MQTT-Host",
+            "port": "Port",
+            "username": "Benutzername",
+            "password": "Passwort",
+            "write_confirmation": "Anwendungsbestätigung für Schreibbefehle verlangen",
+            "allow_eeprom_writes": "EEPROM-Schreibzugriffe erlauben"
+          },
+          "data_description": {
+            "allow_eeprom_writes": "Standardmäßig an. 3 Befehle pro Stunde und 5 Befehle pro Tag je Ofen, gemeinsam für Cloud, Bluetooth und lokales MQTT. Cloud und Bluetooth geben den Zähler bei einem Fehler zurück. MQTT gibt ihn nur zurück, wenn der Befehl nicht gesendet wurde. Aus sperrt diese Schreibzugriffe dieser Integration."
+          }
+        }
+      },
+      "error": {
+        "invalid_mac": "Trage eine eindeutige WLAN-MAC-Adresse mit 12 Hexadezimalstellen ein."
+      },
+      "abort": {
+        "no_cached_devices": "Verbinde dich einmal über die Cloud, um die Ofendaten zu speichern.",
+        "already_configured": "Jeder gespeicherte Ofen hat schon eine eigene Zeile."
       }
     }
   }

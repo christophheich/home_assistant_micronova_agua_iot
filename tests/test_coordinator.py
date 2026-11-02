@@ -7,7 +7,7 @@ import pytest
 from tests.helpers import load_component_module
 
 try:
-    from homeassistant.config_entries import ConfigEntryState
+    from homeassistant.config_entries import ConfigEntryState, ConfigSubentry
     from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
     from homeassistant.exceptions import ConfigEntryNotReady
     from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -51,6 +51,7 @@ def make_config_entry(connection_mode=None):
     if connection_mode:
         options[const.CONF_CONNECTION_MODE] = connection_mode
     config_entry.options = options
+    config_entry.subentries = {}
     return config_entry
 
 
@@ -133,6 +134,22 @@ class TestConnectionModes:
         coordinator = make_coordinator(const.CONNECTION_MODE_LOCAL_MQTT)
         assert isinstance(coordinator.agua, LocalMqttAguaIOT)
         assert coordinator.connection_mode == const.CONNECTION_MODE_LOCAL_MQTT
+
+    def test_local_mqtt_prefers_the_stove_row_over_legacy_options(self):
+        entry = make_config_entry(const.CONNECTION_MODE_LOCAL_MQTT)
+        entry.options["mqtt_devices"] = {
+            "one": {"hostname": "old.example", "allow_eeprom_writes": True}
+        }
+        current = ConfigSubentry(
+            data={"hostname": "127.0.0.1", "port": 1883, "allow_eeprom_writes": False},
+            subentry_type="stove",
+            title="Cadel",
+            unique_id="one",
+        )
+        entry.subentries = {current.subentry_id: current}
+        coordinator = AguaIOTDataUpdateCoordinator(hass=MagicMock(), config_entry=entry)
+        assert coordinator.agua._mqtt_devices["one"]["hostname"] == "127.0.0.1"
+        assert coordinator.agua._mqtt_devices["one"]["allow_eeprom_writes"] is False
 
 
 class TestCloudBootstrapForLocalConnections:

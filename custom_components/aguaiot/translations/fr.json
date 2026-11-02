@@ -29,10 +29,9 @@
     "step": {
       "user": {
         "title": "Options Micronova Agua IOT",
-        "description": "Choisissez Cloud, Bluetooth ou MQTT local.",
+        "description": "Choisissez Cloud, Bluetooth ou MQTT local. Réglez l'hôte MQTT, le port et l'EEPROM sur le poêle.",
         "data": {
-          "connection_mode": "Connexion",
-          "configure_mqtt": "Configurer MQTT par poêle"
+          "connection_mode": "Connexion"
         },
         "sections": {
           "device_fixes": {
@@ -61,7 +60,7 @@
       },
       "mqtt_settings": {
         "title": "Connexion MQTT",
-        "description": "Laissez le serveur vide pour utiliser Home Assistant MQTT. Un mot de passe vide conserve le précédent. Les confirmations applicatives doivent être prises en charge par le serveur ; laissez cette option désactivée pour les courtiers ordinaires.",
+        "description": "Laissez le serveur vide pour utiliser Home Assistant MQTT. Un mot de passe vide conserve le précédent. Les confirmations applicatives doivent être prises en charge par le serveur. Laissez cette option désactivée pour les courtiers ordinaires.",
         "data": {
           "device_mac": "Adresse MAC Wi-Fi",
           "hostname": "Serveur MQTT",
@@ -94,6 +93,46 @@
         "connection_cloud": "Cloud (Micronova API)",
         "connection_bluetooth": "Bluetooth",
         "connection_local_mqtt": "MQTT local"
+      }
+    }
+  },
+  "config_subentries": {
+    "stove": {
+      "entry_type": "Poêle",
+      "initiate_flow": {
+        "user": "Ajouter un poêle",
+        "reconfigure": "Connexion et EEPROM"
+      },
+      "step": {
+        "user": {
+          "title": "Choisir le poêle",
+          "data": {
+            "device": "Poêle"
+          }
+        },
+        "reconfigure": {
+          "title": "Connexion et EEPROM",
+          "description": "Laissez le serveur vide pour utiliser Home Assistant MQTT. Un mot de passe vide conserve le précédent. Les confirmations applicatives doivent être prises en charge par le serveur. Laissez cette option désactivée pour les courtiers ordinaires.",
+          "data": {
+            "device_mac": "Adresse MAC Wi-Fi",
+            "hostname": "Serveur MQTT",
+            "port": "Port",
+            "username": "Utilisateur",
+            "password": "Mot de passe",
+            "write_confirmation": "Exiger une confirmation applicative des écritures",
+            "allow_eeprom_writes": "Autoriser les écritures EEPROM"
+          },
+          "data_description": {
+            "allow_eeprom_writes": "Activé par défaut. 3 commandes par heure et 5 commandes par jour et par poêle, partagées entre cloud, Bluetooth et MQTT local. Cloud et Bluetooth recréditent le quota en cas d'échec. MQTT le recrédite seulement si la commande n'est pas partie. Désactivez pour bloquer ces écritures de cette intégration."
+          }
+        }
+      },
+      "error": {
+        "invalid_mac": "Saisissez une adresse MAC Wi-Fi unique de 12 caractères hexadécimaux."
+      },
+      "abort": {
+        "no_cached_devices": "Connectez-vous une fois au cloud pour enregistrer les données du poêle.",
+        "already_configured": "Chaque poêle enregistré a déjà sa propre ligne."
       }
     }
   }

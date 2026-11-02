@@ -11,6 +11,7 @@ TO_REDACT = {
     CONF_PASSWORD,
     CONF_EMAIL,
     "mqtt_devices",
+    "username",
     "reg_code",
     "security_code",
     "assistance_code",

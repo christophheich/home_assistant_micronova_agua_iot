@@ -14,6 +14,9 @@ component = load_component_module("__init__")
 @pytest.mark.parametrize("stage", ["refresh", "platforms", "cancel"])
 async def test_failed_setup_closes_transport(monkeypatch, stage):
     hass, entry = MagicMock(), MagicMock()
+    entry.data = {}
+    entry.options = {}
+    entry.subentries = {}
     coordinator = MagicMock()
     coordinator.agua.close = AsyncMock()
     coordinator.async_config_entry_first_refresh = AsyncMock()

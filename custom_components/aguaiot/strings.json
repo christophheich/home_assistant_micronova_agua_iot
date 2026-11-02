@@ -29,10 +29,9 @@
     "step": {
       "user": {
         "title": "Micronova Agua IOT options",
-        "description": "Choose Cloud, Bluetooth or local MQTT.",
+        "description": "Choose Cloud, Bluetooth or local MQTT. Set the MQTT host, port and EEPROM permission on the stove.",
         "data": {
-          "connection_mode": "Connection",
-          "configure_mqtt": "Configure MQTT per stove"
+          "connection_mode": "Connection"
         },
         "sections": {
           "device_fixes": {
@@ -61,7 +60,7 @@
       },
       "mqtt_settings": {
         "title": "MQTT connection",
-        "description": "Leave the host empty to use Home Assistant MQTT. Password blank keeps the saved password. Application write receipts must be supported by the endpoint; leave disabled for ordinary brokers.",
+        "description": "Leave the host empty to use Home Assistant MQTT. Password blank keeps the saved password. Application write receipts must be supported by the endpoint. Leave them disabled for ordinary brokers.",
         "data": {
           "device_mac": "Wi-Fi MAC address",
           "hostname": "MQTT host",
@@ -94,6 +93,46 @@
         "connection_cloud": "Cloud (Micronova API)",
         "connection_bluetooth": "Bluetooth",
         "connection_local_mqtt": "Local MQTT"
+      }
+    }
+  },
+  "config_subentries": {
+    "stove": {
+      "entry_type": "Stove",
+      "initiate_flow": {
+        "user": "Add stove",
+        "reconfigure": "Stove connection and EEPROM"
+      },
+      "step": {
+        "user": {
+          "title": "Choose stove",
+          "data": {
+            "device": "Stove"
+          }
+        },
+        "reconfigure": {
+          "title": "Stove connection and EEPROM",
+          "description": "Leave the host empty to use Home Assistant MQTT. Password blank keeps the saved password. Application write receipts must be supported by the endpoint. Leave them disabled for ordinary brokers.",
+          "data": {
+            "device_mac": "Wi-Fi MAC address",
+            "hostname": "MQTT host",
+            "port": "Port",
+            "username": "Username",
+            "password": "Password",
+            "write_confirmation": "Require application write receipt",
+            "allow_eeprom_writes": "Allow EEPROM writes"
+          },
+          "data_description": {
+            "allow_eeprom_writes": "On by default. 3 commands per hour and 5 commands per day per stove, shared by cloud, Bluetooth and local MQTT. Cloud and Bluetooth give the count back when the write fails. MQTT gives it back only when the command was not sent. Turn off to block these writes from this integration."
+          }
+        }
+      },
+      "error": {
+        "invalid_mac": "Enter a unique Wi-Fi MAC address with 12 hexadecimal digits."
+      },
+      "abort": {
+        "no_cached_devices": "Connect through the cloud once to cache the stove metadata.",
+        "already_configured": "Every cached stove already has its own row."
       }
     }
   }

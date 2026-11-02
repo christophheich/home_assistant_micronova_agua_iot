@@ -6,8 +6,11 @@ import uuid
 import voluptuous as vol
 from homeassistant.config_entries import (
     CONN_CLASS_CLOUD_POLL,
+    SOURCE_RECONFIGURE,
     ConfigEntry,
     ConfigFlow,
+    ConfigSubentry,
+    ConfigSubentryFlow,
     OptionsFlowWithReload,
 )
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
@@ -49,6 +52,7 @@ from .const import (
 )
 from .local_ble import DEFAULT_CHAR_UUID, DEFAULT_SERVICE_UUID, LocalBleAguaIOT
 from .local_mqtt import LocalMqttAguaIOT, LocalMqttSetupError
+from .stoves import SUBENTRY_STOVE, normalize_stove_settings, stove_settings_by_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -158,16 +162,21 @@ class AguaIOTConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(config_entry: ConfigEntry):
         return AguaIOTOptionsFlowHandler()
 
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(cls, config_entry: ConfigEntry):
+        """Expose one stove row for MQTT and the EEPROM switch."""
+        return {SUBENTRY_STOVE: StoveSubentryFlow}
+
 
 class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
     async def async_step_init(self, _user_input=None):
         """Manage the options."""
         return await self.async_step_user()
 
-    def _build_client(self, connection_mode, user_input=None):
+    def _build_client(self, connection_mode):
         """Create the configured cloud, BLE, or local MQTT transport."""
         entry = self.config_entry
-        user_input = user_input or {}
         # Device fixes are stored in the device_fixes section, legacy entries
         # stored them flat.
         device_fixes = entry.options.get(CONF_DEVICE_FIXES) or {}
@@ -210,9 +219,7 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
         if connection_mode == CONNECTION_MODE_LOCAL_MQTT:
             return LocalMqttAguaIOT(
                 hass=self.hass,
-                mqtt_devices=user_input.get(
-                    "mqtt_devices", entry.options.get("mqtt_devices", {})
-                ),
+                mqtt_devices=stove_settings_by_id(entry),
                 cached_devices=entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES),
                 **return_kwargs,
             )
@@ -258,7 +265,6 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
             ),
         )
         schema = {
-            vol.Optional("configure_mqtt", default=False): selector.BooleanSelector(),
             vol.Optional(
                 CONF_CONNECTION_MODE,
                 default=user_input.get(
@@ -348,12 +354,12 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
         errors = {}
 
         if user_input is not None:
-            if user_input.pop("configure_mqtt", False):
-                return await self.async_step_mqtt_device()
             user_input = {
                 **self.config_entry.options,
                 **flatten_connection_options(user_input),
             }
+            user_input.pop("configure_mqtt", None)
+            user_input.pop("mqtt_devices", None)
             connection_mode = user_input.get(
                 CONF_CONNECTION_MODE,
                 self.config_entry.options.get(
@@ -362,7 +368,7 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
             )
             agua = None
             try:
-                agua = self._build_client(connection_mode, user_input)
+                agua = self._build_client(connection_mode)
                 await agua.connect()
                 if connection_mode in (
                     CONNECTION_MODE_BLUETOOTH,
@@ -392,25 +398,87 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
             errors=errors,
         )
 
-    async def async_step_mqtt_device(self, user_input=None):
-        devices = self.config_entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES, [])
+
+def _stove_form_schema(defaults):
+    """Build the stove form. A blank password field keeps the saved password."""
+    defaults = dict(defaults)
+    defaults.pop("password", None)
+    return vol.Schema(
+        {
+            vol.Required("device_mac", default=defaults.get("device_mac", "")): str,
+            vol.Optional("hostname", default=defaults.get("hostname", "")): str,
+            vol.Required("port", default=defaults.get("port", 1883)): vol.All(
+                vol.Coerce(int), vol.Range(min=1, max=65535)
+            ),
+            vol.Optional("username", default=defaults.get("username", "")): str,
+            vol.Optional("password"): selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+            ),
+            vol.Optional(
+                "allow_eeprom_writes",
+                default=defaults.get("allow_eeprom_writes", True),
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                "write_confirmation",
+                default=defaults.get("write_confirmation", False),
+            ): selector.BooleanSelector(),
+        }
+    )
+
+
+class StoveSubentryFlow(ConfigSubentryFlow):
+    """Add or edit the MQTT connection and EEPROM switch for one stove."""
+
+    def _entry(self):
+        return self._get_entry()
+
+    def _remaining(self, entry):
+        existing = {
+            str(subentry.unique_id)
+            for subentry in entry.subentries.values()
+            if subentry.subentry_type == SUBENTRY_STOVE and subentry.unique_id
+        }
+        remaining = []
+        for device in entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES) or []:
+            device_id = str(device.get("id_device") or "")
+            if device_id and device_id not in existing:
+                remaining.append(device)
+        return remaining
+
+    def _title_for(self, entry, device_id):
+        for device in entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES) or []:
+            if str(device.get("id_device") or "") == str(device_id):
+                return str(device.get("name") or device_id)
+        return str(device_id)
+
+    async def async_step_user(self, user_input=None):
+        """Pick a cached stove, then open its connection form."""
+        entry = self._entry()
+        cached = entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES) or []
+        if not cached:
+            return self.async_abort(reason="no_cached_devices")
+        remaining = self._remaining(entry)
+        if not remaining:
+            return self.async_abort(reason="already_configured")
+        if len(remaining) == 1 and user_input is None:
+            self._device_id = str(remaining[0]["id_device"])
+            return await self._settings(None, None)
         choices = {
             str(device["id_device"]): device.get("name") or str(device["id_device"])
-            for device in devices
+            for device in remaining
         }
-        if not choices:
-            return self.async_abort(reason="no_cached_devices")
         if user_input is not None and user_input.get("device") in choices:
-            self._mqtt_device = user_input["device"]
-            return await self.async_step_mqtt_settings()
+            self._device_id = user_input["device"]
+            return await self._settings(None, None)
         return self.async_show_form(
-            step_id="mqtt_device",
+            step_id="user",
             data_schema=vol.Schema(
                 {
                     vol.Required("device"): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=[
-                                {"value": k, "label": v} for k, v in choices.items()
+                                {"value": key, "label": label}
+                                for key, label in choices.items()
                             ],
                             mode=selector.SelectSelectorMode.LIST,
                         )
@@ -419,60 +487,45 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
             ),
         )
 
-    async def async_step_mqtt_settings(self, user_input=None):
-        devices = self.config_entry.options.get("mqtt_devices", {})
-        stored = devices.get(self._mqtt_device, {})
+    async def async_step_reconfigure(self, user_input=None):
+        """Open the same form from the gear on an existing stove row."""
+        if self.source != SOURCE_RECONFIGURE:
+            return await self._settings(user_input, None)
+        subentry = self._get_reconfigure_subentry()
+        self._device_id = str(subentry.unique_id)
+        return await self._settings(user_input, subentry)
+
+    async def _settings(self, user_input, subentry):
+        entry = self._entry()
+        stored = dict(subentry.data) if subentry is not None else {}
         errors = {}
         if user_input is not None:
-            import re
-
-            values = dict(user_input)
-            mac = re.sub(r"[:-]", "", str(values.get("device_mac", ""))).strip().upper()
-            if not re.fullmatch(r"[0-9A-F]{12}", mac):
-                errors["device_mac"] = "invalid_mac"
-            if any(
-                key != self._mqtt_device and value.get("device_mac") == mac
-                for key, value in devices.items()
-            ):
-                errors["device_mac"] = "invalid_mac"
-            values["device_mac"] = mac
-            if not values.get("password") and stored.get("password"):
-                values["password"] = stored["password"]
+            values, errors = normalize_stove_settings(
+                entry, self._device_id, user_input, stored
+            )
             if not errors:
-                return self.async_create_entry(
-                    title="",
-                    data={
-                        **self.config_entry.options,
-                        "mqtt_devices": {**devices, self._mqtt_device: values},
-                    },
+                if subentry is not None:
+                    return self.async_update_reload_and_abort(
+                        entry, subentry, data=values
+                    )
+                self.hass.config_entries.async_add_subentry(
+                    entry,
+                    ConfigSubentry(
+                        data=values,
+                        subentry_type=SUBENTRY_STOVE,
+                        title=self._title_for(entry, self._device_id),
+                        unique_id=str(self._device_id),
+                    ),
                 )
-        defaults = {**stored, **(user_input or {})}
+                self.hass.config_entries.async_schedule_reload(entry.entry_id)
+                return self.async_abort(
+                    reason="reconfigure_successful",
+                    translation_domain="homeassistant",
+                )
+        shown = {**stored, **(user_input or {})}
+        shown.pop("password", None)
         return self.async_show_form(
-            step_id="mqtt_settings",
-            errors=errors,
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        "device_mac", default=defaults.get("device_mac", "")
-                    ): str,
-                    vol.Optional("hostname", default=defaults.get("hostname", "")): str,
-                    vol.Required("port", default=defaults.get("port", 1883)): vol.All(
-                        vol.Coerce(int), vol.Range(min=1, max=65535)
-                    ),
-                    vol.Optional("username", default=defaults.get("username", "")): str,
-                    vol.Optional("password"): selector.TextSelector(
-                        selector.TextSelectorConfig(
-                            type=selector.TextSelectorType.PASSWORD
-                        )
-                    ),
-                    vol.Optional(
-                        "allow_eeprom_writes",
-                        default=defaults.get("allow_eeprom_writes", True),
-                    ): selector.BooleanSelector(),
-                    vol.Optional(
-                        "write_confirmation",
-                        default=defaults.get("write_confirmation", False),
-                    ): selector.BooleanSelector(),
-                }
-            ),
+            step_id="reconfigure",
+            errors=errors or None,
+            data_schema=_stove_form_schema(shown),
         )

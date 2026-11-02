@@ -30,8 +30,7 @@
       "user": {
         "title": "Micronova Agua IOT opties",
         "data": {
-          "connection_mode": "Verbinding",
-          "configure_mqtt": "MQTT per kachel instellen"
+          "connection_mode": "Verbinding"
         },
         "sections": {
           "device_fixes": {
@@ -51,7 +50,7 @@
             }
           }
         },
-        "description": "Kies Cloud, Bluetooth of lokale MQTT."
+        "description": "Kies Cloud, Bluetooth of lokale MQTT. Stel de MQTT-host, de poort en EEPROM op de kachel in."
       },
       "mqtt_device": {
         "title": "Kachel kiezen",
@@ -61,7 +60,7 @@
       },
       "mqtt_settings": {
         "title": "MQTT-verbinding",
-        "description": "Laat de host leeg voor Home Assistant MQTT. Een leeg wachtwoord behoudt het opgeslagen wachtwoord. De server moet toepassingsbevestigingen ondersteunen; laat dit uitgeschakeld voor gewone brokers.",
+        "description": "Laat de host leeg voor Home Assistant MQTT. Een leeg wachtwoord behoudt het opgeslagen wachtwoord. De server moet toepassingsbevestigingen ondersteunen. Laat dit uitgeschakeld voor gewone brokers.",
         "data": {
           "device_mac": "Wifi-MAC-adres",
           "hostname": "MQTT-host",
@@ -94,6 +93,46 @@
         "connection_cloud": "Cloud (Micronova API)",
         "connection_bluetooth": "Bluetooth",
         "connection_local_mqtt": "Lokale MQTT"
+      }
+    }
+  },
+  "config_subentries": {
+    "stove": {
+      "entry_type": "Kachel",
+      "initiate_flow": {
+        "user": "Kachel toevoegen",
+        "reconfigure": "Verbinding en EEPROM"
+      },
+      "step": {
+        "user": {
+          "title": "Kachel kiezen",
+          "data": {
+            "device": "Kachel"
+          }
+        },
+        "reconfigure": {
+          "title": "Verbinding en EEPROM",
+          "description": "Laat de host leeg voor Home Assistant MQTT. Een leeg wachtwoord behoudt het opgeslagen wachtwoord. De server moet toepassingsbevestigingen ondersteunen. Laat dit uitgeschakeld voor gewone brokers.",
+          "data": {
+            "device_mac": "Wifi-MAC-adres",
+            "hostname": "MQTT-host",
+            "port": "Poort",
+            "username": "Gebruikersnaam",
+            "password": "Wachtwoord",
+            "write_confirmation": "Toepassingsbevestiging voor schrijfacties vereisen",
+            "allow_eeprom_writes": "EEPROM-schrijfacties toestaan"
+          },
+          "data_description": {
+            "allow_eeprom_writes": "Standaard aan. 3 opdrachten per uur en 5 opdrachten per dag per kachel, gedeeld door cloud, Bluetooth en lokale MQTT. Cloud en Bluetooth geven de telling terug als het schrijven mislukt. MQTT geeft die alleen terug als de opdracht niet is verzonden. Uitschakelen blokkeert deze schrijfacties van deze integratie."
+          }
+        }
+      },
+      "error": {
+        "invalid_mac": "Voer een uniek wifi-MAC-adres met 12 hexadecimale tekens in."
+      },
+      "abort": {
+        "no_cached_devices": "Maak eenmaal verbinding met de cloud om de kachelgegevens op te slaan.",
+        "already_configured": "Elke opgeslagen kachel heeft al een eigen rij."
       }
     }
   }
