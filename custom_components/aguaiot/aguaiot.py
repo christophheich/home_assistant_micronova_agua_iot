@@ -49,6 +49,9 @@ class aguaiot:
         language="ENG",
         http_timeout=30,
         buffer_read_timeout=30,
+        *,
+        hass=None,
+        device_options=None,
     ):
         self.api_url = api_url.rstrip("/")
         self.customer_code = customer_code
@@ -71,6 +74,8 @@ class aguaiot:
         self.air_temp_fix = air_temp_fix
         self.reading_error_fix = reading_error_fix
         self.language = language
+        self.hass = hass
+        self.device_options = device_options or {}
 
         if not self.async_client:
             self.async_client = httpx.AsyncClient()
@@ -434,11 +439,16 @@ class aguaiot:
         set_values = []
 
         for key in items:
-            set_items.append(int(device.get_register(key)["offset"]))
-            set_masks.append(int(device.get_register(key)["mask"]))
+            register = device.get_register(key)
+            set_items.append(int(register["offset"]))
+            set_masks.append(int(register["mask"]))
             set_values.append(items[key])
             set_bits.append(8)
             set_endians.append("L")
+
+        from .eeprom import reserve_device_write
+
+        await reserve_device_write(self.hass, device, set_items, self.device_options)
 
         payload = {
             "id_device": device.id_device,

@@ -72,7 +72,7 @@
           "allow_eeprom_writes": "EEPROM-Schreibzugriffe erlauben"
         },
         "data_description": {
-          "allow_eeprom_writes": "Standardmäßig erlaubt, begrenzt auf 15 Befehle pro Stunde und 50 pro Tag je Ofen. Ausschalten sperrt Änderungen an dauerhaft gespeicherten Sollwerten und Zeitplänen. Andere MQTT-Clients benötigen eigenen Schutz."
+          "allow_eeprom_writes": "Standardmäßig an. 15 Befehle pro Stunde und 50 pro Tag je Ofen, gemeinsam für Cloud, Bluetooth und lokales MQTT. Aus sperrt diese Schreibzugriffe dieser Integration. Andere Programme sind nicht begrenzt."
         }
       }
     },

@@ -72,7 +72,7 @@
           "allow_eeprom_writes": "EEPROM-schrijfacties toestaan"
         },
         "data_description": {
-          "allow_eeprom_writes": "Standaard toegestaan, maximaal 15 opdrachten per uur en 50 per dag per kachel. Uitschakelen blokkeert wijzigingen aan opgeslagen instelwaarden en schema’s. Andere MQTT-clients hebben eigen beveiliging nodig."
+          "allow_eeprom_writes": "Standaard aan. 15 opdrachten per uur en 50 per dag per kachel, gedeeld door cloud, Bluetooth en lokale MQTT. Uitschakelen blokkeert deze schrijfacties van deze integratie. Andere programma's zijn niet beperkt."
         }
       }
     },

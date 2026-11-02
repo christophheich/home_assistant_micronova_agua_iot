@@ -13,7 +13,6 @@ from .coordinator import AguaIOTDataUpdateCoordinator
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the AguaIOT integration."""
-    hass.data.setdefault(DOMAIN, {})["mqtt_client_config_version"] = 1
     if DOMAIN in config:
         for entry_config in config[DOMAIN]:
             hass.async_create_task(

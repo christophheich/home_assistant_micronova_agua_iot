@@ -439,9 +439,7 @@ async def test_ram_and_explicit_eeprom_opt_in(mqtt_api, offset, allowed):
         {} if allowed is None else {"DEV_01": {"allow_eeprom_writes": allowed}}
     )
     client.hass.data = {
-        "aguaiot": {
-            "mqtt_eeprom_budgets": {"A1B2C3D4E5F6": MagicMock(reserve=AsyncMock())}
-        }
+        "aguaiot": {"eeprom_budgets": {"DEV_01": MagicMock(reserve=AsyncMock())}}
     }
     await client.connect()
     mqtt_api.async_publish.reset_mock()
@@ -452,6 +450,11 @@ async def test_ram_and_explicit_eeprom_opt_in(mqtt_api, offset, allowed):
             {"Cmd": "RequestWriting", "Items": [offset], "Values": [1]},
         )
         mqtt_api.async_publish.assert_awaited_once()
+        budget = client.hass.data["aguaiot"]["eeprom_budgets"]["DEV_01"]
+        if offset >= 32768:
+            budget.reserve.assert_awaited_once()
+        else:
+            budget.reserve.assert_not_awaited()
     finally:
         await client.close()
 

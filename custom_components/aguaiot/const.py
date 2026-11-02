@@ -85,8 +85,6 @@ CONF_BLE_BOOTSTRAP_DEVICES = "ble_bootstrap_devices"
 CONF_BLE_SERVICE_UUID = "ble_service_uuid"
 CONF_BLE_CHAR_UUID = "ble_char_uuid"
 
-EEPROM_OFFSET_THRESHOLD = 32768
-
 CONNECTION_MODE_CLOUD = "connection_cloud"
 CONNECTION_MODE_BLUETOOTH = "connection_bluetooth"
 CONNECTION_MODE_LOCAL_MQTT = "connection_local_mqtt"

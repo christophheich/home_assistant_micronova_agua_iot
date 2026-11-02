@@ -23,10 +23,10 @@ from .aguaiot import (
     aguaiot,
     update_devices,
 )
+from .eeprom import EEPROM_OFFSET_THRESHOLD, clean_mac, reserve_device_write
 
 _LOGGER = logging.getLogger(__name__)
 
-EEPROM_OFFSET_THRESHOLD = 32768
 ACTIVE_EEPROM_PREFIXES = ("chrono_p",)
 
 
@@ -162,17 +162,8 @@ class LocalMqttAguaIOT:
             self.devices.append(dev)
 
             if not self._device_mac:
-                serial_clean = self._clean_identifier(entry.get("product_serial"))
-                id_device_clean = self._clean_identifier(entry.get("id_device"))
-                self._device_mac = next(
-                    (
-                        candidate
-                        for candidate in (serial_clean, id_device_clean)
-                        if candidate
-                        and len(candidate) == 12
-                        and all(c in "0123456789ABCDEF" for c in candidate)
-                    ),
-                    None,
+                self._device_mac = clean_mac(entry.get("product_serial")) or clean_mac(
+                    entry.get("id_device")
                 )
 
             if not self._security_code:
@@ -225,17 +216,8 @@ class LocalMqttAguaIOT:
 
         for dev in self.devices:
             if not self._device_mac:
-                serial_clean = self._clean_identifier(dev.product_serial)
-                id_device_clean = self._clean_identifier(dev.id_device)
-                self._device_mac = next(
-                    (
-                        candidate
-                        for candidate in (serial_clean, id_device_clean)
-                        if candidate
-                        and len(candidate) == 12
-                        and all(c in "0123456789ABCDEF" for c in candidate)
-                    ),
-                    None,
+                self._device_mac = clean_mac(dev.product_serial) or clean_mac(
+                    dev.id_device
                 )
             if not self._security_code:
                 dev_info = dev.device_info_data or {}
@@ -330,12 +312,8 @@ class LocalMqttAguaIOT:
             return
         settings = self._mqtt_devices.get(str(self.devices[0].id_device), {})
         if settings.get("device_mac"):
-            mac = self._clean_identifier(settings["device_mac"])
-            if (
-                not mac
-                or len(mac) != 12
-                or any(c not in "0123456789ABCDEF" for c in mac)
-            ):
+            mac = clean_mac(settings["device_mac"])
+            if not mac:
                 raise LocalMqttSetupError("invalid_mac", "Invalid stove MAC address")
             self._device_mac = mac
         if not self._device_mac:
@@ -543,23 +521,13 @@ class LocalMqttAguaIOT:
             or "UNKNOWN"
         )
         async with self._write_lock:
-            settings = self._mqtt_devices.get(str(device.id_device), {})
-            if any(offset < 0 or offset > 65535 for offset in item_offsets):
-                raise AguaIOTError("Invalid register offset")
-            if any(offset >= EEPROM_OFFSET_THRESHOLD for offset in item_offsets):
-                if settings.get("allow_eeprom_writes", True) is not True:
-                    raise AguaIOTError(
-                        "EEPROM writes are blocked for this stove. Enable them in "
-                        "its MQTT settings to change persistent setpoints or schedules."
-                    )
-                from .eeprom import EepromBudget
-
-                budgets = self.hass.data.setdefault("aguaiot", {}).setdefault(
-                    "mqtt_eeprom_budgets", {}
-                )
-                if target_mac not in budgets:
-                    budgets[target_mac] = EepromBudget(self.hass, target_mac)
-                await budgets[target_mac].reserve()
+            await reserve_device_write(
+                self.hass,
+                device,
+                item_offsets,
+                self._mqtt_devices,
+                explicit_mac=target_mac,
+            )
             cmd = {
                 "mi": str(uuid.uuid4()),
                 "mt": "Q",

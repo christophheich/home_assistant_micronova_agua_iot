@@ -72,7 +72,7 @@
           "allow_eeprom_writes": "Autoriser les écritures EEPROM"
         },
         "data_description": {
-          "allow_eeprom_writes": "Activé par défaut, avec une limite de 15 commandes par heure et 50 par jour et par poêle. Désactivez pour bloquer les modifications des consignes persistantes et des programmes. Les autres clients MQTT nécessitent leur propre protection."
+          "allow_eeprom_writes": "Activé par défaut. 15 commandes par heure et 50 par jour et par poêle, partagées entre cloud, Bluetooth et MQTT local. Désactivez pour bloquer ces écritures de cette intégration. Les autres programmes ne sont pas limités."
         }
       }
     },

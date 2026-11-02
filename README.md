@@ -60,6 +60,10 @@ Or folow these steps:
 2. Install the plugin via HACS (Micronova Agua IOT)
 3. Add the integration through the home assistant configuration flow
 
+## EEPROM writes
+
+Offsets at or above 32768 are stored on the stove. This integration allows those writes, with 15 commands per hour and 50 per day per stove. Cloud, Bluetooth and local MQTT share the count. The off switch is "Allow EEPROM writes" in the per-stove MQTT settings.
+
 ## Local Bluetooth mode
 
 This integration includes an experimental `Bluetooth` connection mode for Micronova stoves equipped with a local BLE module (for example the Micronova / Navel `T009_*` module seen by Home Assistant).
@@ -72,9 +76,7 @@ For more information see [BLUETOOTH](docs/BLUETOOTH.md).
 
 This integration supports local control for Micronova stoves equipped with a Navel 2.0 Wi-Fi module.
 
-Local MQTT uses an existing broker through Home Assistant MQTT or a configurable endpoint per stove. Agua IOT does not run a broker. See [local MQTT setup](docs/LOCAL_MQTT.md).
-
-For setup instructions, DNS details, and EEPROM safety notes, see [LOCAL_MQTT](docs/LOCAL_MQTT.md).
+Local MQTT uses an existing broker through Home Assistant MQTT or a per-stove endpoint. Agua IOT does not run a broker. Setup and DNS are in [local MQTT setup](docs/LOCAL_MQTT.md).
 
 ## Credits
 

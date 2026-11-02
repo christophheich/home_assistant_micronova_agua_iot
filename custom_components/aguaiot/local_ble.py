@@ -193,6 +193,7 @@ class LocalBleAguaIOT:
         service_uuid: str = DEFAULT_SERVICE_UUID,
         char_uuid: str = DEFAULT_CHAR_UUID,
         cached_devices: list[dict[str, Any]] | None = None,
+        device_options: dict | None = None,
     ) -> None:
         self.hass = hass
         self.api_url = api_url.rstrip("/")
@@ -216,6 +217,7 @@ class LocalBleAguaIOT:
 
         self._session_uuid = str(uuid.uuid4()).upper()
         self._cached_devices = cached_devices or []
+        self.device_options = device_options or {}
         self._cache_dirty = False
         self._command_lock = asyncio.Lock()
 
@@ -366,6 +368,10 @@ class LocalBleAguaIOT:
             masks.append(mask)
             bit_data.append(8)
             values.append(value)
+
+        from .eeprom import reserve_device_write
+
+        await reserve_device_write(self.hass, device, item_offsets, self.device_options)
 
         payload = {
             "Cmd": "RequestWriting",

@@ -83,6 +83,38 @@ async def test_silent_storage_failure_blocks_reservation(budget_env, monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_ram_write_ignores_the_block_and_the_budget(budget_env):
+    hass, _ = budget_env
+    hass.data = {}
+    await eeprom.reserve_eeprom_write(hass, "DEV_01", [33], allowed=False)
+    assert hass.data == {}
+
+
+@pytest.mark.asyncio
+async def test_cloud_and_mqtt_share_one_stove_budget(budget_env):
+    hass, _ = budget_env
+    hass.data = {}
+    for _ in range(15):
+        await eeprom.reserve_eeprom_write(hass, "DEV_01", [32768])
+    with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
+        await eeprom.reserve_eeprom_write(
+            hass, "DEV_01", [32768], legacy_id="AABBCCDDEEFF"
+        )
+
+
+@pytest.mark.asyncio
+async def test_old_mqtt_history_still_counts(budget_env):
+    hass, now = budget_env
+    hass.data = {}
+    old = eeprom.Store(hass, 1, "aguaiot.mqtt.AABBCCDDEEFF.eeprom")
+    await old.async_save([now[0]] * 15)
+    with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
+        await eeprom.reserve_eeprom_write(
+            hass, "DEV_01", [32768], legacy_id="AABBCCDDEEFF"
+        )
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("data", ["bad", [True], [float("nan")], [-1]])
 async def test_invalid_history_blocks_writes(budget_env, data):
     hass, _ = budget_env
