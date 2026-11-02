@@ -30,12 +30,8 @@
       "user": {
         "title": "Micronova Agua IOT opties",
         "data": {
-          "description": "Selecteer `Bluetooth (auto-detect)` zodat Home Assistant automatisch een Micronova BLE-module in de buurt detecteert en valideert bij verzenden van het formulier (experimenteel).",
-          "http_timeout": "Timeout voor API verzoeken (seconden).",
-          "buffer_read_timeout": "Timeout voor kachel buffer uitlezen (seconden).",
-          "language": "Taal voor beschrijvingen.",
-          "update_interval": "Tijd tussen updates (seconden).",
-          "connection_mode": "Connectie modus:"
+          "connection_mode": "Verbinding",
+          "configure_mqtt": "MQTT per kachel instellen"
         },
         "sections": {
           "device_fixes": {
@@ -44,16 +40,60 @@
               "air_temp_fix": "[Jolly Mec] Negeer foutieve air temperature bij gebruik van een externe thermostaat.",
               "reading_error_fix": "[Bronpi] Filter foutieve waardes (wanneer kachel geen stroom heeft)."
             }
+          },
+          "advanced_connection": {
+            "name": "Geavanceerde verbindingsinstellingen",
+            "data": {
+              "http_timeout": "Timeout voor API verzoeken (seconden).",
+              "buffer_read_timeout": "Timeout voor kachel buffer uitlezen (seconden).",
+              "language": "Taal voor beschrijvingen.",
+              "update_interval": "Tijd tussen updates (seconden)."
+            }
           }
+        },
+        "description": "Kies Cloud, Bluetooth of lokale MQTT."
+      },
+      "mqtt_device": {
+        "title": "Kachel kiezen",
+        "data": {
+          "device": "Kachel"
+        }
+      },
+      "mqtt_settings": {
+        "title": "MQTT-verbinding",
+        "description": "Laat de host leeg voor Home Assistant MQTT. Een leeg wachtwoord behoudt het opgeslagen wachtwoord. De server moet toepassingsbevestigingen ondersteunen; laat dit uitgeschakeld voor gewone brokers.",
+        "data": {
+          "device_mac": "Wifi-MAC-adres",
+          "hostname": "MQTT-host",
+          "port": "Poort",
+          "username": "Gebruikersnaam",
+          "password": "Wachtwoord",
+          "write_confirmation": "Toepassingsbevestiging voor schrijfacties vereisen",
+          "allow_eeprom_writes": "EEPROM-schrijfacties toestaan"
+        },
+        "data_description": {
+          "allow_eeprom_writes": "Standaard toegestaan, maximaal 15 opdrachten per uur en 50 per dag per kachel. Uitschakelen blokkeert wijzigingen aan opgeslagen instelwaarden en schema’s. Andere MQTT-clients hebben eigen beveiliging nodig."
         }
       }
+    },
+    "error": {
+      "stove_not_responding": "Geen actuele meting ontvangen. Controleer de kachelverbinding, DNS-verwijzing en MQTT.",
+      "connection_error": "Verbinding met Agua IOT API is niet mogelijk.",
+      "unauthorized": "Inloggen mislukt, valideer de gebruikersdata.",
+      "unknown_error": "Onbekende fout, valideer de configuratie.",
+      "mqtt_unavailable": "Configureer Home Assistant MQTT of een server per kachel.",
+      "invalid_mac": "Voer een uniek wifi-MAC-adres met 12 hexadecimale tekens in."
+    },
+    "abort": {
+      "no_cached_devices": "Maak eenmaal verbinding met de cloud om de kachelgegevens op te slaan."
     }
   },
   "selector": {
     "connection_mode": {
       "options": {
         "connection_cloud": "Cloud (Micronova API)",
-        "connection_bluetooth": "Bluetooth (auto-detect)"
+        "connection_bluetooth": "Bluetooth",
+        "connection_local_mqtt": "Lokale MQTT"
       }
     }
   }

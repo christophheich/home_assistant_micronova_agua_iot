@@ -72,7 +72,7 @@ For more information see [BLUETOOTH](docs/BLUETOOTH.md).
 
 This integration supports local control for Micronova stoves equipped with a Navel 2.0 Wi-Fi module.
 
-Home Assistant runs an embedded local MQTT broker on port 1883. By redirecting the vendor server hostname to Home Assistant via DNS rewrite, the stove connects directly to your local Home Assistant instance with no cloud roundtrip.
+Local MQTT uses an existing broker through Home Assistant MQTT or a configurable endpoint per stove. Agua IOT does not run a broker. See [local MQTT setup](docs/LOCAL_MQTT.md).
 
 For setup instructions, DNS details, and EEPROM safety notes, see [LOCAL_MQTT](docs/LOCAL_MQTT.md).
 

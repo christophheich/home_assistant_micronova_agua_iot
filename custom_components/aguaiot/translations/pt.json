@@ -1,12 +1,12 @@
 {
   "config": {
     "abort": {
-      "already_configured": "Equipamento já configurado"
+      "device_already_configured": "O dispositivo já está configurado."
     },
     "error": {
-      "cannot_connect": "Falha na ligação",
-      "invalid_auth": "Falha na Autenticação ",
-      "unknown": "Erro desconhecido"
+      "connection_error": "Não foi possível estabelecer ligação.",
+      "unauthorized": "Falha na autenticação. Verifique as credenciais.",
+      "unknown_error": "Erro desconhecido. Verifique a configuração."
     },
     "step": {
       "user": {
@@ -30,26 +30,70 @@
       "user": {
         "title": "Opções Micronova Agua IOT",
         "data": {
-          "language": "Idioma para descrições",
-          "connection_mode": "Tryb połączenia:"
+          "connection_mode": "Ligação",
+          "configure_mqtt": "Configurar MQTT por salamandra"
         },
         "sections": {
           "device_fixes": {
-            "name": "Poprawki specyficzne dla urządzeń",
+            "name": "Correções específicas do dispositivo",
             "data": {
               "air_temp_fix": "[Jolly Mec] Ignorar temperatura do ar incorreta ao usar termostato externo.",
               "reading_error_fix": "[Bronpi] Filtrar leituras incorretas (quando o forno está sem energia)."
             }
+          },
+          "advanced_connection": {
+            "name": "Definições avançadas de ligação",
+            "data": {
+              "language": "Idioma para descrições",
+              "http_timeout": "Tempo limite da API em segundos",
+              "buffer_read_timeout": "Tempo limite das leituras em segundos",
+              "update_interval": "Intervalo de atualização em segundos"
+            }
           }
+        },
+        "description": "Escolha Cloud, Bluetooth ou MQTT local."
+      },
+      "mqtt_device": {
+        "title": "Selecionar salamandra",
+        "data": {
+          "device": "Salamandra"
+        }
+      },
+      "mqtt_settings": {
+        "title": "Ligação MQTT",
+        "description": "Deixe o servidor vazio para utilizar o Home Assistant MQTT. Uma palavra-passe vazia mantém a anterior. As confirmações da aplicação devem ser suportadas pelo servidor; mantenha desativado para brokers comuns.",
+        "data": {
+          "device_mac": "Endereço MAC Wi-Fi",
+          "hostname": "Servidor MQTT",
+          "port": "Porta",
+          "username": "Utilizador",
+          "password": "Palavra-passe",
+          "write_confirmation": "Exigir confirmação da aplicação para escritas",
+          "allow_eeprom_writes": "Permitir escritas na EEPROM"
+        },
+        "data_description": {
+          "allow_eeprom_writes": "Ativado por predefinição, limitado a 15 comandos por hora e 50 por dia por salamandra. Desative para bloquear alterações a valores persistentes e horários. Outros clientes MQTT precisam da sua própria proteção."
         }
       }
+    },
+    "error": {
+      "stove_not_responding": "Nenhuma leitura atual recebida. Verifique a ligação, o redirecionamento DNS e o MQTT.",
+      "connection_error": "Não foi possível estabelecer ligação.",
+      "unauthorized": "Falha na autenticação. Verifique as credenciais.",
+      "unknown_error": "Erro desconhecido. Verifique a configuração.",
+      "mqtt_unavailable": "Configure o Home Assistant MQTT ou um servidor por salamandra.",
+      "invalid_mac": "Introduza um endereço MAC Wi-Fi único com 12 caracteres hexadecimais."
+    },
+    "abort": {
+      "no_cached_devices": "Ligue-se uma vez à cloud para guardar os dados da salamandra."
     }
   },
   "selector": {
     "connection_mode": {
       "options": {
-      "connection_cloud": "Cloud (Micronova API)",
-      "connection_bluetooth": "Bluetooth (auto-detect)"
+        "connection_cloud": "Cloud (Micronova API)",
+        "connection_bluetooth": "Bluetooth",
+        "connection_local_mqtt": "MQTT local"
       }
     }
   }

@@ -19,14 +19,6 @@ class StubLocalBleAguaIOT:
     """Placeholder for the Bluetooth transport, which is not tested here."""
 
 
-class StubLocalMqttAguaIOT:
-    """Placeholder for the local MQTT transport, which is tested separately."""
-
-    def __init__(self, *args, **kwargs):
-        self.args = args
-        self.kwargs = kwargs
-
-
 coordinator_module = load_component_module(
     "coordinator",
     stubbed_modules={
@@ -35,13 +27,10 @@ coordinator_module = load_component_module(
             "DEFAULT_SERVICE_UUID": "0000ffe5-0000-1000-8000-00805f9b34fb",
             "LocalBleAguaIOT": StubLocalBleAguaIOT,
         },
-        "local_mqtt": {
-            "DEFAULT_LOCAL_MQTT_PORT": 1883,
-            "LocalMqttAguaIOT": StubLocalMqttAguaIOT,
-        },
     },
 )
 const = load_component_module("const")
+LocalMqttAguaIOT = load_component_module("local_mqtt").LocalMqttAguaIOT
 
 AguaIOTDataUpdateCoordinator = coordinator_module.AguaIOTDataUpdateCoordinator
 AguaIOTUpdateError = coordinator_module.AguaIOTUpdateError
@@ -142,5 +131,32 @@ class TestFirstRefresh:
 class TestConnectionModes:
     def test_local_mqtt_mode_initialization(self):
         coordinator = make_coordinator(const.CONNECTION_MODE_LOCAL_MQTT)
-        assert isinstance(coordinator.agua, StubLocalMqttAguaIOT)
+        assert isinstance(coordinator.agua, LocalMqttAguaIOT)
         assert coordinator.connection_mode == const.CONNECTION_MODE_LOCAL_MQTT
+
+
+class TestCloudBootstrapForLocalConnections:
+    @pytest.mark.asyncio
+    async def test_cloud_refresh_caches_available_register_maps(self):
+        coordinator = make_coordinator()
+        cached = {
+            "product_serial": "AABBCCDDEEFF",
+            "register_map": {"temp_air_get": {"offset": 1}},
+        }
+        coordinator.agua.devices = [
+            MagicMock(export_cache=MagicMock(return_value=cached))
+        ]
+        await coordinator._async_persist_ble_bootstrap_if_needed()
+        update = coordinator.hass.config_entries.async_update_entry
+        assert update.call_args.kwargs["data"][const.CONF_BLE_BOOTSTRAP_DEVICES] == [
+            cached
+        ]
+
+    @pytest.mark.asyncio
+    async def test_cloud_refresh_does_not_save_incomplete_maps(self):
+        coordinator = make_coordinator()
+        coordinator.agua.devices = [
+            MagicMock(export_cache=MagicMock(return_value={"register_map": {}}))
+        ]
+        await coordinator._async_persist_ble_bootstrap_if_needed()
+        coordinator.hass.config_entries.async_update_entry.assert_not_called()

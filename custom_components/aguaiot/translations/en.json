@@ -6,7 +6,7 @@
     "error": {
       "connection_error": "Connection to Agua IOT API not possible.",
       "unauthorized": "Failed to login, please check credentials.",
-      "unknown_error": "Unkown error, please double check configuration."
+      "unknown_error": "Unknown error, please double check configuration."
     },
     "step": {
       "user": {
@@ -29,36 +29,71 @@
     "step": {
       "user": {
         "title": "Micronova Agua IOT options",
-        "description": "Select `Bluetooth (auto-detect)` to use local BLE or `Local MQTT (Navel 2.0 Wi-Fi)` to host an embedded MQTT broker on port 1883.",
+        "description": "Choose Cloud, Bluetooth or local MQTT.",
         "data": {
-          "http_timeout": "Timeout for API calls (seconds).",
-          "buffer_read_timeout": "Timeout for stove buffer reading (seconds).",
-          "language": "Language for descriptions.",
-          "update_interval": "Time between updates (seconds).",
-          "connection_mode": "Connection mode:",
-          "local_mqtt_port": "Local MQTT server port (default: 1883).",
-          "allow_eeprom_writes": "Allow EEPROM writes (required for temperature setpoints; caution: frequent automation writes cause flash wear).",
-          "max_eeprom_writes_per_hour": "Maximum EEPROM writes per hour (default: 15).",
-          "max_eeprom_writes_per_day": "Maximum EEPROM writes per 24 hours (default: 50)."
+          "connection_mode": "Connection",
+          "configure_mqtt": "Configure MQTT per stove"
         },
         "sections": {
           "device_fixes": {
             "name": "Device specific fixes",
             "data": {
-              "air_temp_fix": "[Jolly Mec] Ignore incorrect air temperature when using external themostat.",
+              "air_temp_fix": "[Jolly Mec] Ignore incorrect air temperature when using external thermostat.",
               "reading_error_fix": "[Bronpi] Filter incorrect readings (when stove is without power)."
+            }
+          },
+          "advanced_connection": {
+            "name": "Advanced connection settings",
+            "data": {
+              "http_timeout": "Timeout for API calls (seconds).",
+              "buffer_read_timeout": "Timeout for stove buffer reading (seconds).",
+              "language": "Language for descriptions.",
+              "update_interval": "Time between updates (seconds)."
             }
           }
         }
+      },
+      "mqtt_device": {
+        "title": "Choose stove",
+        "data": {
+          "device": "Stove"
+        }
+      },
+      "mqtt_settings": {
+        "title": "MQTT connection",
+        "description": "Leave the host empty to use Home Assistant MQTT. Password blank keeps the saved password. Application write receipts must be supported by the endpoint; leave disabled for ordinary brokers.",
+        "data": {
+          "device_mac": "Wi-Fi MAC address",
+          "hostname": "MQTT host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "write_confirmation": "Require application write receipt",
+          "allow_eeprom_writes": "Allow EEPROM writes"
+        },
+        "data_description": {
+          "allow_eeprom_writes": "Enabled by default, limited to 15 commands per hour and 50 per day per stove. Disable to block persistent setpoint and schedule changes. Other MQTT clients need their own protection."
+        }
       }
+    },
+    "error": {
+      "stove_not_responding": "No fresh reading received. Check the stove connection, hostname redirect and MQTT settings.",
+      "connection_error": "Connection to Agua IOT API not possible.",
+      "unauthorized": "Failed to login, please check credentials.",
+      "unknown_error": "Unknown error, please double check configuration.",
+      "mqtt_unavailable": "Configure Home Assistant MQTT or enter a per-stove endpoint.",
+      "invalid_mac": "Enter a unique Wi-Fi MAC address with 12 hexadecimal digits."
+    },
+    "abort": {
+      "no_cached_devices": "Connect through the cloud once to cache the stove metadata."
     }
   },
   "selector": {
     "connection_mode": {
       "options": {
         "connection_cloud": "Cloud (Micronova API)",
-        "connection_bluetooth": "Bluetooth (auto-detect)",
-        "connection_local_mqtt": "Local MQTT (Navel 2.0 Wi-Fi)"
+        "connection_bluetooth": "Bluetooth",
+        "connection_local_mqtt": "Local MQTT"
       }
     }
   }

@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+import sys
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.helpers import AguaIOTError, load_component_module
+from tests.helpers import load_component_module
 
 local_mqtt_module = load_component_module("local_mqtt")
 LocalMqttAguaIOT = local_mqtt_module.LocalMqttAguaIOT
-DEFAULT_LOCAL_MQTT_PORT = local_mqtt_module.DEFAULT_LOCAL_MQTT_PORT
 
 
 def make_dummy_cached_devices():
@@ -28,9 +28,24 @@ def make_dummy_cached_devices():
             "id_registers_map": 5,
             "device_info": {"reg_code": "98765432"},
             "register_map": {
-                "temp_air_get": {"offset": 1, "mask": 65535, "formula": "# / 10", "reg_type": "GET"},
-                "temp_smoke_get": {"offset": 6, "mask": 65535, "formula": "#", "reg_type": "GET"},
-                "status_managed_set": {"offset": 33, "mask": 65535, "formula": "#", "reg_type": "SET"},
+                "temp_air_get": {
+                    "offset": 1,
+                    "mask": 65535,
+                    "formula": "# / 10",
+                    "reg_type": "GET",
+                },
+                "temp_smoke_get": {
+                    "offset": 6,
+                    "mask": 65535,
+                    "formula": "#",
+                    "reg_type": "GET",
+                },
+                "status_managed_set": {
+                    "offset": 33,
+                    "mask": 65535,
+                    "formula": "#",
+                    "reg_type": "SET",
+                },
                 "temp_air_set": {
                     "offset": 32893,
                     "mask": 65535,
@@ -50,11 +65,7 @@ def make_dummy_cached_devices():
 
 
 def make_test_instance(
-    port=1883,
     cached_devices=None,
-    allow_eeprom_writes=True,
-    max_eeprom_writes_per_hour=15,
-    max_eeprom_writes_per_day=50,
 ):
     """Create a LocalMqttAguaIOT test instance with dummy credentials."""
     hass = MagicMock()
@@ -65,10 +76,6 @@ def make_test_instance(
         email="test@example.com",
         password="secret_password",
         unique_id="uuid-test-1234",
-        port=port,
-        allow_eeprom_writes=allow_eeprom_writes,
-        max_eeprom_writes_per_hour=max_eeprom_writes_per_hour,
-        max_eeprom_writes_per_day=max_eeprom_writes_per_day,
         cached_devices=cached_devices,
     )
 
@@ -85,10 +92,7 @@ class TestLocalMqttBasics:
 
     def test_init_defaults(self):
         client = make_test_instance()
-        assert client.mqtt_port == 1883
-        assert client.allow_eeprom_writes is True
-        assert client.max_eeprom_writes_per_hour == 15
-        assert client.max_eeprom_writes_per_day == 50
+        assert client._unsubscribe is None
         assert client.devices == []
         assert client.cache_dirty is False
 
@@ -115,174 +119,370 @@ class TestLocalMqttBasics:
         assert 32893 in offsets
         assert 32826 not in offsets
 
-    def test_mqtt_publish_encoding(self):
-        client = make_test_instance()
-        topic = "navel/TESTMAC"
-        payload = b'{"hello":"world"}'
-        packet = client._encode_mqtt_publish(topic, payload)
 
-        # Header 0x30 = PUBLISH, QoS 0
-        assert packet[0] == 0x30
-        # Topic length
-        topic_len = int.from_bytes(packet[2:4], "big")
-        assert topic_len == len(topic)
-        extracted_topic = packet[4 : 4 + topic_len].decode("utf-8")
-        assert extracted_topic == topic
-        assert payload in packet
+@pytest.fixture
+def mqtt_api(monkeypatch):
+    """Provide the public HA MQTT API without running a live broker."""
+    unsubscribes = [MagicMock(), MagicMock()]
+    api = SimpleNamespace(
+        async_wait_for_mqtt_client=AsyncMock(return_value=True),
+        async_subscribe=AsyncMock(side_effect=unsubscribes),
+        async_publish=AsyncMock(),
+        is_connected=MagicMock(return_value=True),
+        unsubscribes=unsubscribes,
+    )
+    monkeypatch.setitem(sys.modules, "homeassistant.components.mqtt", api)
+    # Python's from-import can also resolve a cached package attribute.
+    import homeassistant.components
+
+    monkeypatch.setattr(homeassistant.components, "mqtt", api, raising=False)
+    return api
 
 
-class TestEepromProtection:
-    """Test EEPROM write permission and rate limits."""
-
-    def test_ram_writes_always_allowed(self):
-        client = make_test_instance(
-            allow_eeprom_writes=False,
-            max_eeprom_writes_per_hour=1,
-            max_eeprom_writes_per_day=1,
-        )
-        # Offset 33 is in RAM (< 32768), so it should never be blocked or counted
-        for _ in range(10):
-            client._check_and_record_eeprom_write([33, 51])
-        assert len(client._eeprom_write_timestamps) == 0
-
-    def test_eeprom_writes_disabled_blocks_write(self):
-        client = make_test_instance(allow_eeprom_writes=False)
-        with pytest.raises(AguaIOTError, match="EEPROM writes are disabled"):
-            client._check_and_record_eeprom_write([32893])
-
-    def test_eeprom_hourly_rate_limit_enforced(self):
-        client = make_test_instance(
-            allow_eeprom_writes=True,
-            max_eeprom_writes_per_hour=3,
-            max_eeprom_writes_per_day=10,
-        )
-        client._check_and_record_eeprom_write([32893])
-        client._check_and_record_eeprom_write([32893])
-        client._check_and_record_eeprom_write([32893])
-
-        with pytest.raises(AguaIOTError, match="EEPROM write rate limit exceeded"):
-            client._check_and_record_eeprom_write([32893])
-
-    def test_eeprom_daily_rate_limit_enforced(self):
-        client = make_test_instance(
-            allow_eeprom_writes=True,
-            max_eeprom_writes_per_hour=10,
-            max_eeprom_writes_per_day=2,
-        )
-        client._check_and_record_eeprom_write([32893])
-        client._check_and_record_eeprom_write([32893])
-
-        with pytest.raises(AguaIOTError, match="EEPROM daily write limit exceeded"):
-            client._check_and_record_eeprom_write([32893])
+def message(payload, *, retain=False):
+    return SimpleNamespace(payload=json.dumps(payload), retain=retain)
 
 
 class TestLocalMqttProtocolFlow:
-    """Test embedded MQTT network protocol handlers."""
+    """Exercise the Navel protocol through Home Assistant's shared MQTT client."""
 
     @pytest.mark.asyncio
-    async def test_server_bind_and_close(self):
-        # Pick an arbitrary high port for testing
-        cached = make_dummy_cached_devices()
-        client = make_test_instance(port=18883, cached_devices=cached)
-        client._load_cached_devices(cached)
-        await client.start_server()
-        assert client._server is not None
-        assert client._server.is_serving()
+    async def test_connect_subscribes_and_authenticates_existing_stove(self, mqtt_api):
+        client = make_test_instance(cached_devices=make_dummy_cached_devices())
+        await client.connect()
+        assert [call.args[1] for call in mqtt_api.async_subscribe.call_args_list] == [
+            "navel/A1B2C3D4E5F6",
+            "master/responses/navel/A1B2C3D4E5F6",
+        ]
+        publish = mqtt_api.async_publish.call_args
+        assert json.loads(publish.args[2])["pl"]["Cmd"] == "Identity"
+        assert publish.kwargs == {"qos": 0, "retain": False}
+        await client._message_received(
+            message({"mt": "R", "pl": {"Cmd": "Identity", "Result": 0}})
+        )
 
-        validation = await client.validate_local_connection()
-        assert validation["server_port"] == 18883
-        assert validation["connected_stove"] is False
+        async def live_reply(_hass, _topic, payload, **_kwargs):
+            query = json.loads(payload)
+            if query["pl"]["Cmd"] == "RequestReading":
+                await client._message_received(
+                    message(
+                        {
+                            "mt": "R",
+                            "pl": {
+                                "Cmd": "RequestReading",
+                                "Items": [1],
+                                "Values": [225],
+                            },
+                        }
+                    )
+                )
 
+        mqtt_api.async_publish.side_effect = live_reply
+        assert await client.validate_local_connection() == {
+            "device_mac": "A1B2C3D4E5F6"
+        }
         await client.close()
-        assert client._server is None
+        await client.close()
+        for unsubscribe in mqtt_api.unsubscribes:
+            unsubscribe.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_full_stove_handshake(self):
-        cached = make_dummy_cached_devices()
-        client = make_test_instance(port=18884, cached_devices=cached)
-        client._load_cached_devices(cached)
-        await client.start_server()
+    async def test_missing_mqtt_is_actionable(self, mqtt_api):
+        mqtt_api.async_wait_for_mqtt_client.return_value = False
+        client = make_test_instance(cached_devices=make_dummy_cached_devices())
+        with pytest.raises(
+            local_mqtt_module.AguaIOTConnectionError,
+            match="Configure Home Assistant MQTT",
+        ):
+            await client.connect()
+        mqtt_api.async_subscribe.assert_not_called()
 
-        # Connect simulated stove client
-        reader, writer = await asyncio.open_connection("127.0.0.1", 18884)
+    @pytest.mark.asyncio
+    async def test_partial_subscription_failure_cleans_up(self, mqtt_api):
+        mqtt_api.async_subscribe.side_effect = [
+            mqtt_api.unsubscribes[0],
+            RuntimeError("subscribe failed"),
+        ]
+        client = make_test_instance(cached_devices=make_dummy_cached_devices())
+        with pytest.raises(
+            local_mqtt_module.AguaIOTConnectionError, match="Could not initialize"
+        ):
+            await client.connect()
+        mqtt_api.unsubscribes[0].assert_called_once()
+        assert client._unsubscribe is None
 
-        # 1. Send MQTT CONNECT with ClientId 'A1B2C3D4E5F6'
-        client_id = "A1B2C3D4E5F6"
-        cid_bytes = client_id.encode("utf-8")
-        connect_var_header = b"\x00\x04MQTT\x04\x02\x00\x3c"
-        connect_payload = len(cid_bytes).to_bytes(2, "big") + cid_bytes
-        body = connect_var_header + connect_payload
-        connect_packet = b"\x10" + bytes([len(body)]) + body
-
-        writer.write(connect_packet)
-        await writer.drain()
-
-        # Read CONNACK (0x20, 0x02, 0x00, 0x00)
-        connack = await reader.read(4)
-        assert connack == b"\x20\x02\x00\x00"
-        assert client._device_mac == "A1B2C3D4E5F6"
-
-        # 2. Send MQTT SUBSCRIBE to navel/A1B2C3D4E5F6
-        topic = "navel/A1B2C3D4E5F6"
-        sub_body = b"\x00\x01\x00" + bytes([len(topic)]) + topic.encode("utf-8") + b"\x00"
-        sub_packet = b"\x82" + bytes([len(sub_body)]) + sub_body
-        writer.write(sub_packet)
-        await writer.drain()
-
-        # Read SUBACK (0x90, 0x03, msg_id, qos)
-        suback = await reader.read(5)
-        assert suback[0] == 0x90
-        assert suback[1] == 0x03
-
-        # 3. Send Stove Identity announcement (mt: 'C')
-        identity_pl = {
-            "mi": "msg-001",
-            "mt": "C",
-            "pl": {
-                "Cmd": "Identity",
-                "Id": "A1B2C3D4E5F6",
-                "Security": "87654321",
-                "Devices": {"Type": "PELLET_BOARD"},
-            },
-        }
-        id_bytes = json.dumps(identity_pl).encode("utf-8")
-        pub_packet = client._encode_mqtt_publish("navel/A1B2C3D4E5F6", id_bytes)
-
-        writer.write(pub_packet)
-        await writer.drain()
-
-        # Server should reply with ACK and Auth Query
-        await asyncio.sleep(0.3)
-        assert client._security_code == "87654321"
-
-        # 4. Simulate Stove Ping (mt: 'C')
-        ping_pl = {"mi": "msg-002", "mt": "C", "pl": {"Cmd": "Ping"}}
-        ping_bytes = json.dumps(ping_pl).encode("utf-8")
-        pub_ping = client._encode_mqtt_publish("navel/A1B2C3D4E5F6", ping_bytes)
-        writer.write(pub_ping)
-        await writer.drain()
-
-        # 5. Simulate Stove sending RequestReading response
-        reading_pl = {
-            "mi": "msg-003",
-            "mt": "R",
-            "pl": {
-                "Cmd": "RequestReading",
-                "Items": [1, 2, 6, 32893],
-                "Values": [225, 230, 115, 23],
-            },
-        }
-        read_bytes = json.dumps(reading_pl).encode("utf-8")
-        pub_reading = client._encode_mqtt_publish("navel/A1B2C3D4E5F6", read_bytes)
-        writer.write(pub_reading)
-        await writer.drain()
-
-        await asyncio.sleep(0.1)
+    @pytest.mark.asyncio
+    async def test_stove_handshake_ping_and_reading(self, mqtt_api):
+        client = make_test_instance(cached_devices=make_dummy_cached_devices())
+        await client.connect()
+        mqtt_api.async_publish.reset_mock()
+        await client._message_received(
+            message(
+                {
+                    "mi": "identity-1",
+                    "mt": "C",
+                    "pl": {
+                        "Cmd": "Identity",
+                        "Id": "A1B2C3D4E5F6",
+                        "Security": "87654321",
+                    },
+                }
+            )
+        )
+        payloads = [
+            json.loads(call.args[2]) for call in mqtt_api.async_publish.call_args_list
+        ]
+        assert payloads[0]["mt"] == "A"
+        assert payloads[0]["mi"] == "identity-1"
+        assert payloads[1]["pl"]["Security"] == "87654321"
+        assert client.cache_dirty
+        cache = client.export_bootstrap_cache()
+        restored = make_test_instance(cached_devices=cache)
+        restored._load_cached_devices(cache)
+        assert restored._security_code == "87654321"
+        await client._message_received(
+            message({"mi": "ping-1", "mt": "C", "pl": {"Cmd": "Ping"}})
+        )
+        assert json.loads(mqtt_api.async_publish.call_args.args[2])["mi"] == "ping-1"
+        await client._message_received(
+            message(
+                {
+                    "mt": "R",
+                    "pl": {
+                        "Cmd": "RequestReading",
+                        "Items": [1, 6, 32893],
+                        "Values": [225, 115, 23],
+                    },
+                }
+            )
+        )
         assert client._register_values[1] == 225
-        assert client._register_values[2] == 230
-        assert client._register_values[6] == 115
         assert client._register_values[32893] == 23
+        assert client._response_event.is_set()
+        client._identity_ready.clear()
+        client._identity_pending = False
+        mqtt_api.async_publish.reset_mock()
+        published = []
 
-        writer.close()
-        await writer.wait_closed()
+        async def answer_after_identity(_hass, _topic, payload, **_kwargs):
+            query = json.loads(payload)
+            published.append(query["pl"]["Cmd"])
+            if query["pl"]["Cmd"] == "Identity":
+                await client._message_received(
+                    message({"mt": "R", "pl": {"Cmd": "Identity", "Result": 0}})
+                )
+            elif query["pl"]["Cmd"] == "RequestReading":
+                assert client._identity_ready.is_set()
+                await client._message_received(
+                    message(
+                        {
+                            "mt": "R",
+                            "pl": {
+                                "Cmd": "RequestReading",
+                                "Items": [1],
+                                "Values": [226],
+                            },
+                        }
+                    )
+                )
+
+        mqtt_api.async_publish.side_effect = answer_after_identity
+        assert (await client._fetch_device_information(client.devices[0]))[1] == 226
+        assert published == ["Identity", "RequestReading"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "payload,retained",
+        [
+            ({"mt": "Q", "pl": {"Cmd": "Identity"}}, False),
+            ({"mt": "A", "pl": {"Cmd": "Ping"}}, False),
+            ({"mt": "C", "pl": {"Cmd": "Ping"}}, True),
+            ({"mt": "C", "pl": {"Cmd": "Identity", "Id": "FFFFFFFFFFFF"}}, False),
+            (
+                {
+                    "mt": "R",
+                    "pl": {
+                        "Cmd": "RequestReading",
+                        "Items": [1],
+                        "Values": ["invalid"],
+                    },
+                },
+                False,
+            ),
+            (
+                {
+                    "mt": "R",
+                    "pl": {"Cmd": "RequestReading", "Items": [1, 6], "Values": [225]},
+                },
+                False,
+            ),
+            ({"mt": "C", "pl": {"Cmd": "Identity", "Id": 123}}, False),
+            (
+                {"mt": "R", "pl": {"Cmd": "RequestReading", "Items": [], "Values": []}},
+                False,
+            ),
+            (
+                {
+                    "mt": "R",
+                    "pl": {
+                        "Cmd": "RequestReading",
+                        "Items": [1],
+                        "Values": [float("inf")],
+                    },
+                },
+                False,
+            ),
+            ([], False),
+        ],
+    )
+    async def test_ignores_echo_retained_foreign_and_invalid_messages(
+        self, mqtt_api, payload, retained
+    ):
+        client = make_test_instance(cached_devices=make_dummy_cached_devices())
+        await client.connect()
+        mqtt_api.async_publish.reset_mock()
+        await client._message_received(message(payload, retain=retained))
+        mqtt_api.async_publish.assert_not_called()
+        assert not client._response_event.is_set()
+
+    @pytest.mark.asyncio
+    async def test_disconnected_broker_rejects_publish(self, mqtt_api):
+        client = make_test_instance(cached_devices=make_dummy_cached_devices())
+        await client.connect()
+        mqtt_api.is_connected.return_value = False
+        with pytest.raises(
+            local_mqtt_module.AguaIOTConnectionError, match="not connected"
+        ):
+            await client._send_mqtt_publish("navel/A1B2C3D4E5F6", {"mt": "Q"})
+
+
+@pytest.mark.asyncio
+async def test_cached_values_do_not_pass_live_connection_check(mqtt_api):
+    client = make_test_instance(cached_devices=make_dummy_cached_devices())
+    await client.connect()
+    client.buffer_read_timeout = 0.01
+    assert client._register_values  # Cache exists, but no live stove has answered.
+    with pytest.raises(local_mqtt_module.LocalMqttSetupError, match="No live reading"):
+        await client.validate_local_connection()
+    await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("connected", [True, False])
+async def test_poll_never_reports_cached_readings_as_live(mqtt_api, connected):
+    client = make_test_instance(cached_devices=make_dummy_cached_devices())
+    await client.connect()
+    client.buffer_read_timeout = 0.01
+    assert client._register_values
+    if not connected:
+        await client.close()
+    try:
+        with pytest.raises(local_mqtt_module.AguaIOTConnectionError):
+            await client._fetch_device_information(client.devices[0])
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_explicit_mac_uses_shared_ha_mqtt_without_other_integration(mqtt_api):
+    cached = make_dummy_cached_devices()
+    cached[0]["product_serial"] = "1234567890123"
+    cached[0]["id_device"] = "cloud-id"
+    client = make_test_instance(cached_devices=cached)
+    client.hass.data = {}
+    client._mqtt_devices = {"cloud-id": {"device_mac": "AABBCCDDEEFF"}}
+    try:
+        await client.connect()
+        assert client._device_mac == "AABBCCDDEEFF"
+        assert not client._owns_mqtt
+        assert cached[0]["product_serial"] == "1234567890123"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"temp_air_set": 23},
+        {"Cmd": "RequestWriting", "Items": [33, 32768], "Values": [1, 23]},
+    ],
+)
+async def test_eeprom_disabled_blocks_entire_command_before_publish(mqtt_api, payload):
+    client = make_test_instance(cached_devices=make_dummy_cached_devices())
+    await client.connect()
+    mqtt_api.async_publish.reset_mock()
+    client._fetch_device_information = AsyncMock(
+        return_value=dict(client._register_values)
+    )
+    await client.update()
+    client._mqtt_devices = {"DEV_01": {"allow_eeprom_writes": False}}
+    before = dict(client._register_values)
+    try:
+        with pytest.raises(
+            local_mqtt_module.AguaIOTError, match="EEPROM writes are blocked"
+        ):
+            await client._request_writing(client.devices[0], payload)
+        mqtt_api.async_publish.assert_not_awaited()
+        assert client._register_values == before
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "offset,allowed", [(32767, False), (32768, True), (32768, None)]
+)
+async def test_ram_and_explicit_eeprom_opt_in(mqtt_api, offset, allowed):
+    client = make_test_instance(cached_devices=make_dummy_cached_devices())
+    client._mqtt_devices = (
+        {} if allowed is None else {"DEV_01": {"allow_eeprom_writes": allowed}}
+    )
+    client.hass.data = {
+        "aguaiot": {
+            "mqtt_eeprom_budgets": {"A1B2C3D4E5F6": MagicMock(reserve=AsyncMock())}
+        }
+    }
+    await client.connect()
+    mqtt_api.async_publish.reset_mock()
+    client._fetch_device_information = AsyncMock(return_value={})
+    try:
+        await client._request_writing(
+            client.devices[0],
+            {"Cmd": "RequestWriting", "Items": [offset], "Values": [1]},
+        )
+        mqtt_api.async_publish.assert_awaited_once()
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_identity_during_subscription_can_be_answered(mqtt_api):
+    client = make_test_instance(cached_devices=make_dummy_cached_devices())
+
+    async def subscribe(hass, topic, callback, **kwargs):
+        if topic.startswith("master/"):
+            await callback(
+                message(
+                    {
+                        "mi": "early",
+                        "mt": "C",
+                        "pl": {
+                            "Cmd": "Identity",
+                            "Id": "A1B2C3D4E5F6",
+                            "Security": "test-only",
+                        },
+                    }
+                )
+            )
+        return MagicMock()
+
+    mqtt_api.async_subscribe.side_effect = subscribe
+    try:
+        await client.connect()
+        sent = [
+            json.loads(call.args[2]) for call in mqtt_api.async_publish.call_args_list
+        ]
+        assert any(p["mt"] == "A" and p["mi"] == "early" for p in sent)
+    finally:
         await client.close()
