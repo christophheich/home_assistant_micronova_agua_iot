@@ -194,6 +194,7 @@ class LocalBleAguaIOT:
         char_uuid: str = DEFAULT_CHAR_UUID,
         cached_devices: list[dict[str, Any]] | None = None,
         device_options: dict | None = None,
+        eeprom_limits: dict | None = None,
     ) -> None:
         self.hass = hass
         self.api_url = api_url.rstrip("/")
@@ -218,6 +219,7 @@ class LocalBleAguaIOT:
         self._session_uuid = str(uuid.uuid4()).upper()
         self._cached_devices = cached_devices or []
         self.device_options = device_options or {}
+        self.eeprom_limits = eeprom_limits or {}
         self._cache_dirty = False
         self._command_lock = asyncio.Lock()
 
@@ -369,10 +371,14 @@ class LocalBleAguaIOT:
             bit_data.append(8)
             values.append(value)
 
-        from .eeprom import release_device_write, reserve_device_write
+        from .eeprom import reserve_device_write
 
-        reservation = await reserve_device_write(
-            self.hass, device, item_offsets, self.device_options
+        await reserve_device_write(
+            self.hass,
+            device,
+            item_offsets,
+            self.device_options,
+            limits=self.eeprom_limits,
         )
 
         payload = {
@@ -385,15 +391,12 @@ class LocalBleAguaIOT:
             "Values": values,
         }
 
-        try:
-            await self._run_authenticated_session(
-                device,
-                "writing stove registers",
-                lambda session: self._request_writing_session(session, payload),
-            )
-        except Exception:
-            await release_device_write(self.hass, device, reservation)
-            raise
+        await self._run_authenticated_session(
+            device,
+            "writing stove registers",
+            lambda session: self._request_writing_session(session, payload),
+            retry=False,
+        )
 
     async def _validate_local_connection_session(
         self, session: _BleMicronovaSession
@@ -464,9 +467,11 @@ class LocalBleAguaIOT:
         device: Device,
         action: str,
         operation,
+        *,
+        retry: bool = True,
     ) -> Any:
-        """Run one BLE action with a single retry on connection failures."""
-        for attempt in range(2):
+        """Run a BLE action, optionally retrying a failed connection once."""
+        for attempt in range(2 if retry else 1):
             try:
                 async with self._device_session(device) as session:
                     await session.identity()
@@ -478,7 +483,7 @@ class LocalBleAguaIOT:
                 if not retryable:
                     raise
 
-                if attempt == 0:
+                if retry and attempt == 0:
                     _LOGGER.warning(
                         "Micronova BLE link for '%s' failed while %s (%s); retrying once with a fresh connection.",
                         device.name,

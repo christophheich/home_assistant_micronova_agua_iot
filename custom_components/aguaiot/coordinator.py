@@ -107,8 +107,14 @@ class AguaIOTDataUpdateCoordinator(DataUpdateCoordinator):
             "language": language,
             "http_timeout": http_timeout,
             "buffer_read_timeout": buffer_read_timeout,
+            "eeprom_limits": {
+                key: config_entry.options[key]
+                for key in ("max_eeprom_writes_per_hour", "max_eeprom_writes_per_day")
+                if key in config_entry.options
+            },
         }
 
+        self._cloud_cache_saved = False
         device_options = config_entry.options.get("mqtt_devices", {})
         if connection_mode == CONNECTION_MODE_BLUETOOTH:
             self.agua = LocalBleAguaIOT(
@@ -182,6 +188,8 @@ class AguaIOTDataUpdateCoordinator(DataUpdateCoordinator):
         # Cache maps after the first successful cloud refresh, without requiring
         # an attempted switch to a local transport first.
         if self.connection_mode == CONNECTION_MODE_CLOUD:
+            if self._cloud_cache_saved:
+                return
             devices = [device.export_cache() for device in self.agua.devices]
             if (
                 devices
@@ -195,6 +203,9 @@ class AguaIOTDataUpdateCoordinator(DataUpdateCoordinator):
                         CONF_BLE_BOOTSTRAP_DEVICES: devices,
                     },
                 )
+            self._cloud_cache_saved = bool(devices) and all(
+                device.get("register_map") for device in devices
+            )
             return
 
         if not hasattr(self.agua, "cache_dirty") or not self.agua.cache_dirty:

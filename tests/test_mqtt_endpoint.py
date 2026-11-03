@@ -223,3 +223,75 @@ async def test_standard_broker_does_not_require_custom_write_receipts():
     raw.publish.assert_awaited_once()
     assert adapter._write_receipts == {}
     await adapter.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "topic,retained,accepted",
+    [
+        ("master/responses/navel/OTHER", False, True),
+        ("master/responses/navel/AABBCCDDEEFF", True, True),
+        ("master/responses/navel/AABBCCDDEEFF", False, "true"),
+    ],
+)
+async def test_invalid_receipt_does_not_complete_a_write(
+    monkeypatch, topic, retained, accepted
+):
+    import json
+
+    raw = FakeClient()
+    monkeypatch.setattr(module.aiomqtt, "Client", MagicMock(return_value=raw))
+    adapter = module.MqttEndpoint(MagicMock(), {}, AsyncMock(), write_confirmation=True)
+    await adapter.start()
+    task = asyncio.create_task(
+        adapter.async_publish(
+            None,
+            "navel/AABBCCDDEEFF",
+            json.dumps({"mi": "receipt-test", "pl": {"Cmd": "RequestWriting"}}),
+        )
+    )
+    try:
+        async with asyncio.timeout(1):
+            while not raw.publish.called:
+                await asyncio.sleep(0)
+        await raw.queue.put(
+            SimpleNamespace(
+                topic=topic,
+                retain=retained,
+                payload=json.dumps(
+                    {
+                        "mi": "receipt-test",
+                        "mt": "G",
+                        "pl": {"Cmd": "MqttWriteResult", "Accepted": accepted},
+                    }
+                ),
+            )
+        )
+        # A following regular message proves the reader consumed the invalid receipt.
+        seen = asyncio.Event()
+
+        async def received(_message):
+            seen.set()
+
+        await adapter.async_subscribe(None, "sentinel", received)
+        await raw.queue.put(
+            SimpleNamespace(topic="sentinel", retain=False, payload=b"{}")
+        )
+        await asyncio.wait_for(seen.wait(), 1)
+        assert not task.done()
+        await raw.queue.put(
+            SimpleNamespace(
+                topic="master/responses/navel/AABBCCDDEEFF",
+                retain=False,
+                payload=json.dumps(
+                    {
+                        "mi": "receipt-test",
+                        "mt": "G",
+                        "pl": {"Cmd": "MqttWriteResult", "Accepted": True},
+                    }
+                ),
+            )
+        )
+        await asyncio.wait_for(task, 1)
+    finally:
+        await adapter.close()

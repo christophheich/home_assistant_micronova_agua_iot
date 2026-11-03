@@ -1,6 +1,5 @@
 """EEPROM writes are counted before cloud or Bluetooth sends them."""
 
-import json
 import sys
 from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -118,41 +117,17 @@ async def test_bluetooth_ram_write_still_opens_a_session():
     ble._run_authenticated_session = AsyncMock()
     await ble._request_writing(stove(33), {"status_managed_set": 1})
     ble._run_authenticated_session.assert_awaited_once()
-
-
-@pytest.fixture
-def memory_store(monkeypatch, tmp_path):
-    class FakeStore:
-        def __init__(self, hass, version, key, **kwargs):
-            self.path = str(tmp_path / key)
-
-        async def async_load(self):
-            try:
-                with open(self.path) as source:  # noqa: ASYNC230 - tiny local test fixture
-                    return json.load(source)["data"]
-            except FileNotFoundError:
-                return None
-
-        async def async_save(self, data):
-            with open(self.path, "w") as target:  # noqa: ASYNC230 - tiny local test fixture
-                json.dump({"data": data}, target)
-
-    async def execute(fn, *args):
-        return fn(*args)
-
-    monkeypatch.setattr(eeprom, "Store", FakeStore)
-    monkeypatch.setattr(eeprom.time, "time", lambda: 100000.0)
-    return SimpleNamespace(data={}, async_add_executor_job=execute)
+    assert ble._run_authenticated_session.call_args.kwargs["retry"] is False
 
 
 @pytest.mark.asyncio
-async def test_cloud_write_error_returns_the_count(memory_store):
-    client = cloud(memory_store, {})
+async def test_cloud_write_error_keeps_the_count(eeprom_hass):
+    client = cloud(eeprom_hass, {})
     client.handle_webcall = AsyncMock(side_effect=AguaIOTError("nope"))
     with pytest.raises(AguaIOTError, match="nope"):
         await client._request_writing(stove(32893), {"temp_air_set": 22})
-    budget = memory_store.data["aguaiot"]["eeprom_budgets"]["DEV_01"]
-    assert budget.history == []
+    budget = eeprom_hass.data["aguaiot"]["eeprom_budgets"]["DEV_01"]
+    assert len(budget.history) == 1
     client.handle_webcall = AsyncMock(
         side_effect=[
             {"idRequest": "job-1"},
@@ -160,11 +135,11 @@ async def test_cloud_write_error_returns_the_count(memory_store):
         ]
     )
     await client._request_writing(stove(32893), {"temp_air_set": 22})
-    assert len(budget.history) == 1
+    assert len(budget.history) == 2
 
 
 @pytest.mark.asyncio
-async def test_cloud_status_failure_returns_the_count(memory_store, monkeypatch):
+async def test_cloud_status_failure_keeps_the_count(eeprom_hass, monkeypatch):
     module = load_component_module("aguaiot")
     monkeypatch.setattr(module.asyncio, "sleep", AsyncMock())
 
@@ -173,28 +148,28 @@ async def test_cloud_status_failure_returns_the_count(memory_store, monkeypatch)
             return {"idRequest": "job-1"}
         return False
 
-    client = cloud(memory_store, {})
+    client = cloud(eeprom_hass, {})
     client.handle_webcall = AsyncMock(side_effect=webcall)
     with pytest.raises(AguaIOTError, match="Error while request device writing"):
         await client._request_writing(stove(32893), {"temp_air_set": 22})
-    budget = memory_store.data["aguaiot"]["eeprom_budgets"]["DEV_01"]
-    assert budget.history == []
+    budget = eeprom_hass.data["aguaiot"]["eeprom_budgets"]["DEV_01"]
+    assert len(budget.history) == 1
     assert client.handle_webcall.await_args_list[0].args[0] == "POST"
 
 
 @pytest.mark.asyncio
-async def test_cloud_ram_error_does_not_open_a_budget(memory_store):
-    client = cloud(memory_store, {})
+async def test_cloud_ram_error_does_not_open_a_budget(eeprom_hass):
+    client = cloud(eeprom_hass, {})
     client.handle_webcall = AsyncMock(side_effect=AguaIOTError("nope"))
     with pytest.raises(AguaIOTError, match="nope"):
         await client._request_writing(stove(33), {"status_managed_set": 1})
-    assert memory_store.data == {}
+    assert eeprom_hass.data == {}
 
 
 @pytest.mark.asyncio
-async def test_bluetooth_write_error_returns_the_count(memory_store):
+async def test_bluetooth_write_error_keeps_the_count(eeprom_hass):
     ble = real_ble_class()(
-        memory_store,
+        eeprom_hass,
         "https://example.com",
         "123456",
         "a@b.c",
@@ -204,8 +179,30 @@ async def test_bluetooth_write_error_returns_the_count(memory_store):
     ble._run_authenticated_session = AsyncMock(side_effect=AguaIOTError("link down"))
     with pytest.raises(AguaIOTError, match="link down"):
         await ble._request_writing(stove(32893), {"temp_air_set": 22})
-    budget = memory_store.data["aguaiot"]["eeprom_budgets"]["DEV_01"]
-    assert budget.history == []
+    budget = eeprom_hass.data["aguaiot"]["eeprom_budgets"]["DEV_01"]
+    assert len(budget.history) == 1
     ble._run_authenticated_session = AsyncMock()
     await ble._request_writing(stove(32893), {"temp_air_set": 22})
-    assert len(budget.history) == 1
+    assert len(budget.history) == 2
+
+
+@pytest.mark.asyncio
+async def test_bluetooth_write_session_is_not_replayed_after_disconnect():
+    from contextlib import asynccontextmanager
+
+    ble = real_ble_class()(
+        SimpleNamespace(data={}), "https://example.com", "123456", "a@b.c", "pw", "uuid"
+    )
+
+    @asynccontextmanager
+    async def session(_device):
+        yield SimpleNamespace(identity=AsyncMock())
+
+    ble._device_session = session
+    connection_error = load_component_module("aguaiot").AguaIOTConnectionError
+    operation = AsyncMock(side_effect=connection_error("connection lost after write"))
+    with pytest.raises(connection_error):
+        await ble._run_authenticated_session(
+            SimpleNamespace(name="Stove"), "writing", operation, retry=False
+        )
+    operation.assert_awaited_once()

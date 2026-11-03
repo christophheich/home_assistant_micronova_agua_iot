@@ -160,3 +160,35 @@ class TestCloudBootstrapForLocalConnections:
         ]
         await coordinator._async_persist_ble_bootstrap_if_needed()
         coordinator.hass.config_entries.async_update_entry.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_cloud_polling_does_not_rewrite_bootstrap_on_every_value_change():
+    coordinator = make_coordinator()
+    cached = {"register_map": {"temp_air_get": {"offset": 1, "value_raw": "20"}}}
+    coordinator.agua.devices = [MagicMock(export_cache=MagicMock(return_value=cached))]
+    await coordinator._async_persist_ble_bootstrap_if_needed()
+    cached["register_map"]["temp_air_get"]["value_raw"] = "21"
+    await coordinator._async_persist_ble_bootstrap_if_needed()
+    coordinator.hass.config_entries.async_update_entry.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        const.CONNECTION_MODE_CLOUD,
+        const.CONNECTION_MODE_BLUETOOTH,
+        const.CONNECTION_MODE_LOCAL_MQTT,
+    ],
+)
+def test_configured_eeprom_limits_reach_every_transport(monkeypatch, mode):
+    entry = make_config_entry(mode)
+    entry.options.update(max_eeprom_writes_per_hour=50, max_eeprom_writes_per_day=250)
+    ble = MagicMock()
+    monkeypatch.setattr(coordinator_module, "LocalBleAguaIOT", ble)
+    coordinator = AguaIOTDataUpdateCoordinator(hass=MagicMock(), config_entry=entry)
+    expected = {"max_eeprom_writes_per_hour": 50, "max_eeprom_writes_per_day": 250}
+    if mode == const.CONNECTION_MODE_BLUETOOTH:
+        assert ble.call_args.kwargs["eeprom_limits"] == expected
+    else:
+        assert coordinator.agua.eeprom_limits == expected

@@ -52,6 +52,7 @@ class aguaiot:
         *,
         hass=None,
         device_options=None,
+        eeprom_limits=None,
     ):
         self.api_url = api_url.rstrip("/")
         self.customer_code = customer_code
@@ -76,6 +77,7 @@ class aguaiot:
         self.language = language
         self.hass = hass
         self.device_options = device_options or {}
+        self.eeprom_limits = eeprom_limits or {}
 
         if not self.async_client:
             self.async_client = httpx.AsyncClient()
@@ -439,59 +441,54 @@ class aguaiot:
         set_values = []
 
         for key in items:
-            register = device.get_register(key)
-            set_items.append(int(register["offset"]))
-            set_masks.append(int(register["mask"]))
+            set_items.append(int(device.get_register(key)["offset"]))
+            set_masks.append(int(device.get_register(key)["mask"]))
             set_values.append(items[key])
             set_bits.append(8)
             set_endians.append("L")
 
-        from .eeprom import release_device_write, reserve_device_write
+        from .eeprom import reserve_device_write
 
-        reservation = await reserve_device_write(
-            self.hass, device, set_items, self.device_options
+        await reserve_device_write(
+            self.hass, device, set_items, self.device_options, limits=self.eeprom_limits
         )
 
-        try:
-            payload = {
-                "id_device": device.id_device,
-                "id_product": device.id_product,
-                "Protocol": "RWMSmaster",
-                "BitData": set_bits,
-                "Endianess": set_endians,
-                "Items": set_items,
-                "Masks": set_masks,
-                "Values": set_values,
-            }
+        payload = {
+            "id_device": device.id_device,
+            "id_product": device.id_product,
+            "Protocol": "RWMSmaster",
+            "BitData": set_bits,
+            "Endianess": set_endians,
+            "Items": set_items,
+            "Masks": set_masks,
+            "Values": set_values,
+        }
 
-            res = await self.handle_webcall("POST", url, payload)
-            if res is False:
-                raise AguaIOTError("Error while request device writing")
+        res = await self.handle_webcall("POST", url, payload)
+        if res is False:
+            raise AguaIOTError("Error while request device writing")
 
-            id_request = res["idRequest"]
+        id_request = res["idRequest"]
 
-            url = self.api_url + API_PATH_DEVICE_JOB_STATUS + id_request
+        url = self.api_url + API_PATH_DEVICE_JOB_STATUS + id_request
 
-            payload = {}
+        payload = {}
 
-            retry_count = 0
+        retry_count = 0
+        res = await self.handle_webcall("GET", url, payload)
+        while (
+            res is False or res["jobAnswerStatus"] != "completed"
+        ) and retry_count < 10:
+            await asyncio.sleep(1)
             res = await self.handle_webcall("GET", url, payload)
-            while (
-                res is False or res["jobAnswerStatus"] != "completed"
-            ) and retry_count < 10:
-                await asyncio.sleep(1)
-                res = await self.handle_webcall("GET", url, payload)
-                retry_count = retry_count + 1
+            retry_count = retry_count + 1
 
-            if (
-                res is False
-                or res["jobAnswerStatus"] != "completed"
-                or "Cmd" not in res["jobAnswerData"]
-            ):
-                raise AguaIOTError("Error while request device writing")
-        except Exception:
-            await release_device_write(self.hass, device, reservation)
-            raise
+        if (
+            res is False
+            or res["jobAnswerStatus"] != "completed"
+            or "Cmd" not in res["jobAnswerData"]
+        ):
+            raise AguaIOTError("Error while request device writing")
 
 
 class Device:

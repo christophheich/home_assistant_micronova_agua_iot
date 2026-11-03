@@ -61,7 +61,7 @@ Or folow these steps:
 
 ## EEPROM writes
 
-Offsets at or above 32768 are stored on the stove. This integration allows 3 of those commands per hour and 5 per day per stove. Cloud, Bluetooth and local MQTT share the count. At 5 per day a cell of about 32,000 writes lasts about 17.5 years. That is the middle of the usual 10,000 to 100,000 cycle range. Cloud and Bluetooth give the count back when the write fails. MQTT gives it back only when the command was not sent. A sent MQTT command stays counted, because the stove does not confirm that it stored the value. The off switch is "Allow EEPROM writes" in the per-stove MQTT settings.
+EEPROM writes remain enabled by default. The integration options set the maximum write attempts per stove per hour and per day, initially 3 and 5. These limits are configurable without a fixed upper bound. Cloud, Bluetooth and local MQTT share each stove's budget, which persists across restarts. Failed attempts remain counted when delivery may be uncertain. RAM writes are not limited. The per-stove MQTT settings can explicitly block EEPROM writes. See [EEPROM protection](docs/LOCAL_MQTT.md#eeprom-protection).
 
 ## Local Bluetooth mode
 

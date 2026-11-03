@@ -32,7 +32,9 @@
         "data": {
           "language": "Sprache für Beschreibungen",
           "connection_mode": "Verbindungsmodus:",
-          "configure_mqtt": "MQTT pro Ofen konfigurieren"
+          "configure_mqtt": "MQTT pro Ofen konfigurieren",
+          "max_eeprom_writes_per_hour": "Maximale EEPROM-Schreibversuche pro Stunde und Ofen",
+          "max_eeprom_writes_per_day": "Maximale EEPROM-Schreibversuche pro Tag und Ofen"
         },
         "sections": {
           "device_fixes": {
@@ -42,7 +44,8 @@
               "reading_error_fix": "[Bronpi] Inkorrekte Messwerte filtern (wenn der Ofen ohne Strom ist)."
             }
           }
-        }
+        },
+        "description": "Wähle den Verbindungsmodus für alle Öfen dieses Kontos. Die MQTT-Verbindung konfigurierst du je Ofen."
       },
       "mqtt_device": {
         "title": "Ofen auswählen",
@@ -63,7 +66,7 @@
           "allow_eeprom_writes": "EEPROM-Schreibzugriffe erlauben"
         },
         "data_description": {
-          "allow_eeprom_writes": "Standardmäßig an. 3 Befehle pro Stunde und 5 Befehle pro Tag je Ofen, gemeinsam für Cloud, Bluetooth und lokales MQTT. Cloud und Bluetooth geben den Zähler bei einem Fehler zurück. MQTT gibt ihn nur zurück, wenn der Befehl nicht gesendet wurde. Aus sperrt diese Schreibzugriffe dieser Integration."
+          "allow_eeprom_writes": "Standardmäßig eingeschaltet. Die Grenzen sind in den Integrationsoptionen einstellbar, anfangs 3 pro Stunde und 5 pro Tag je Ofen, gemeinsam für Cloud, Bluetooth und MQTT. Fehlgeschlagene Versuche bleiben gezählt, da die Zustellung unklar sein kann. Ausschalten sperrt EEPROM-Schreiben."
         }
       }
     },
@@ -73,7 +76,8 @@
       "unauthorized": "Anmeldung fehlgeschlagen, bitte überprüfen Sie die Anmeldedaten.",
       "unknown_error": "Unbekannter Fehler, bitte die Einstellung überprüfen.",
       "mqtt_unavailable": "Richte Home Assistant MQTT ein oder hinterlege einen Endpunkt pro Ofen.",
-      "invalid_mac": "Trage eine eindeutige WLAN-MAC-Adresse mit 12 Hexadezimalstellen ein."
+      "invalid_mac": "Trage eine eindeutige WLAN-MAC-Adresse mit 12 Hexadezimalstellen ein.",
+      "write_confirmation_requires_host": "Schreibbestätigungen erfordern einen ausdrücklich angegebenen MQTT-Host."
     },
     "abort": {
       "no_cached_devices": "Verbinde dich einmal über die Cloud, um die Ofendaten zu speichern."

@@ -47,8 +47,7 @@ class MqttEndpoint:
         self._identifier = f"navel-user-{uuid.uuid4().hex}"
 
     async def _connect(self):
-        info = self._info() if callable(self._info) else self._info
-        client = aiomqtt.Client(**info, identifier=self._identifier)
+        client = aiomqtt.Client(**self._info, identifier=self._identifier)
         try:
             await client.__aenter__()
         except aiomqtt.MqttError as err:
@@ -103,7 +102,10 @@ class MqttEndpoint:
             if message_id in self._write_receipts:
                 raise HomeAssistantError("Write command message ID is already pending")
             receipt = asyncio.get_running_loop().create_future()
-            self._write_receipts[message_id] = receipt
+            self._write_receipts[message_id] = (
+                receipt,
+                {topic, f"master/responses/{topic}"},
+            )
         try:
             await self._client.publish(topic, payload, qos=qos, retain=retain)
             if receipt is not None:
@@ -123,7 +125,7 @@ class MqttEndpoint:
                 self._write_receipts.pop(message_id, None)
 
     def _fail_pending_writes(self):
-        for receipt in self._write_receipts.values():
+        for receipt, _topics in self._write_receipts.values():
             if not receipt.done():
                 receipt.set_exception(
                     HomeAssistantError(
@@ -150,6 +152,8 @@ class MqttEndpoint:
                         obj = json.loads(message.payload)
                     except (ValueError, TypeError, UnicodeError):
                         obj = None
+                    if message.retain:
+                        continue
                     if isinstance(obj, dict) and obj.get("mt") == "G":
                         message_id = obj.get("mi")
                         pending = (
@@ -160,11 +164,13 @@ class MqttEndpoint:
                         pl = obj.get("pl")
                         if (
                             pending is not None
-                            and not pending.done()
+                            and str(message.topic) in pending[1]
+                            and not pending[0].done()
                             and isinstance(pl, dict)
                             and pl.get("Cmd") == "MqttWriteResult"
+                            and type(pl.get("Accepted")) is bool
                         ):
-                            pending.set_result(pl)
+                            pending[0].set_result(pl)
                         continue
                     callback = self._callbacks.get(str(message.topic))
                     if callback is not None:

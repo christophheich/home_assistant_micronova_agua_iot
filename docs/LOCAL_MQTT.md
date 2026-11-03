@@ -7,18 +7,22 @@ Use an MQTT 3.1.1 broker or protocol-compatible endpoint reachable by both Home 
 3. In Agua IOT options, enable **Configure MQTT per stove** to enter the Wi-Fi MAC and connection settings. Leave the host empty to use the existing Home Assistant MQTT integration, or enter a host, port and credentials for a separate connection.
 4. Select **Local MQTT** as connection mode. The mode is accepted after fresh readings arrive from every stove in the account.
 
-Each stove has separate topics, register cache and application session. Use MAC client IDs and configure the broker ACLs for your firmware. Stove firmware credentials may be shared and MQTT traffic is unencrypted; use a trusted LAN.
+Each stove has separate topics, register cache and application session. Configure the broker ACLs for the stove topics below. Stove firmware credentials may be shared and MQTT traffic is unencrypted; use a trusted LAN.
 
 Topics are `navel/<MAC>` and `master/responses/navel/<MAC>`, with 12 uppercase hexadecimal MAC digits. Topic wildcards are not required by Agua IOT. Retained responses are ignored and commands are never retained or automatically retried.
 
-Application write confirmations are an optional endpoint capability. Leave disabled for ordinary MQTT brokers. When enabled, the client waits for an `mt: G` response with matching `mi`, `pl.Cmd: MqttWriteResult`, boolean `Accepted` and optional `Reason`. An accepted receipt confirms forwarding, not physical execution. Missing receipts mean uncertain delivery; writes are not replayed.
+Application write confirmations require an explicit MQTT host and support from that endpoint. Leave disabled for ordinary MQTT brokers. When enabled, the client waits for an `mt: G` response with matching `mi`, `pl.Cmd: MqttWriteResult`, boolean `Accepted` and optional `Reason`. An accepted receipt confirms forwarding, not physical execution. Missing receipts mean uncertain delivery; writes are not replayed.
 
-Normal polling reads RAM and cached setpoints. Write only registers that belong to this stove model.
+Polling reads RAM and the active setpoint/status registers listed in the cached model map, including EEPROM registers. Schedule settings are excluded. Reading EEPROM does not consume write cycles. The initial cache is not accepted as a live connection check.
 
-Offsets at or above 32768 are EEPROM. Those writes stay allowed. Each stove gets 3 commands per hour and 5 commands per day. At 5 per day a cell of about 32,000 writes lasts about 17.5 years. That is the middle of the usual 10,000 to 100,000 cycle range. Cloud, Bluetooth and local MQTT share that count. One command counts once, even when it changes several registers. The count is saved before the command is sent and kept across restarts. Cloud and Bluetooth give the count back when the write fails. MQTT gives it back only when the command was not sent. A sent command stays counted, including when delivery is uncertain, because the stove does not confirm that it stored the value. If the saved count cannot be read or updated, the write is blocked. RAM reads and RAM writes are free. Turn off "Allow EEPROM writes" in the stove's MQTT settings to block EEPROM writes from this integration. Other programs are not covered. Deleting the saved count is not a supported reset.
+## EEPROM protection
 
-The MQTT connection uses standard host, port and authentication settings. Application write confirmations are optional and must be supported by the endpoint.
+Writes to offsets at or above 32768 remain enabled by default, including for existing installations without stored EEPROM settings. The integration options expose `max_eeprom_writes_per_hour` and `max_eeprom_writes_per_day`, initially 3 and 5. Both accept any positive integer; there is no fixed upper ceiling. Each stove has a separate budget shared by cloud, Bluetooth and local MQTT. A command writing several registers counts as one attempt.
 
-Compatibility depends on the Navel protocol and a valid register map for the actual stove. A vendor hostname such as `remote.mcz.it` alone does not establish compatibility. Unica Nobis models have not been verified.
+The attempt is saved before handing the command to the transport and remains counted on errors or cancellation, since a failed response does not prove the write was not applied. Local writes are not automatically retried. If the history cannot be read or saved, EEPROM writes are blocked. RAM reads and writes are not counted. Turn off "Allow EEPROM writes" in the stove's MQTT settings to explicitly block EEPROM writes from this integration. These controls do not cover writes from other applications and do not guarantee a particular hardware lifetime.
+
+Existing entity IDs and device registrations are retained; switching connection mode does not require removing the integration. One connection mode applies to all stoves in an account. MQTT endpoints can be configured separately per stove. Mixed cloud/Bluetooth/MQTT routing is outside this change.
+
+Compatibility depends on the Navel protocol and a valid register map for the actual stove. A vendor hostname such as `remote.mcz.it` alone does not establish compatibility.
 
 Register reads wait until the stove answers the Identity query. The endpoint must make the current Identity announcement available when the client connects. The learned registration code is saved in the Home Assistant private device cache for later starts and redacted from diagnostics.

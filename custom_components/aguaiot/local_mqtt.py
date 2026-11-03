@@ -14,6 +14,7 @@ import logging
 import uuid
 from typing import Any
 
+from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 
 from .aguaiot import (
@@ -26,16 +27,10 @@ from .aguaiot import (
 from .eeprom import (
     EEPROM_OFFSET_THRESHOLD,
     clean_mac,
-    release_device_write,
     reserve_device_write,
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def _delivery_uncertain(err):
-    """True when the command may already have reached the stove."""
-    return "uncertain" in str(err).lower()
 
 
 ACTIVE_EEPROM_PREFIXES = ("chrono_p",)
@@ -72,6 +67,7 @@ class LocalMqttAguaIOT:
         http_timeout: int | None = 30,
         buffer_read_timeout: int | None = 30,
         mqtt_devices: dict | None = None,
+        eeprom_limits: dict | None = None,
         cached_devices: list[dict[str, Any]] | None = None,
     ) -> None:
         self.hass = hass
@@ -94,11 +90,13 @@ class LocalMqttAguaIOT:
 
         self._session_uuid = str(uuid.uuid4()).upper()
         self._mqtt_devices = mqtt_devices or {}
+        self.eeprom_limits = eeprom_limits or {}
         self._cached_devices = cached_devices or []
         self._cache_dirty = False
         self._children = []
 
         self._unsubscribe = None
+        self._unsubscribe_connection = None
         self._mqtt = None
         self._owns_mqtt = False
         self._read_generation = 0
@@ -142,12 +140,12 @@ class LocalMqttAguaIOT:
             if not isinstance(reg, dict) or "offset" not in reg:
                 continue
             offset = int(reg["offset"])
-            if offset in self._register_values:
-                continue
             raw_val = reg.get("value_raw")
             if raw_val is not None:
                 try:
-                    self._register_values[offset] = int(raw_val)
+                    self._register_values[offset] = self._register_values.get(
+                        offset, 0
+                    ) | (int(raw_val) & int(reg.get("mask", 65535)))
                 except (ValueError, TypeError):
                     pass
 
@@ -258,6 +256,11 @@ class LocalMqttAguaIOT:
                 await self._connect_children(self.export_bootstrap_cache())
                 return
 
+        if not self.devices:
+            raise AguaIOTConnectionError(
+                "No cached stoves are available for local MQTT."
+            )
+
         try:
             await self._subscribe()
             # A stove may already be connected when HA starts.
@@ -301,6 +304,7 @@ class LocalMqttAguaIOT:
                     http_timeout=self.http_timeout,
                     buffer_read_timeout=self.buffer_read_timeout,
                     mqtt_devices=self._mqtt_devices,
+                    eeprom_limits=self.eeprom_limits,
                     cached_devices=[cached],
                 )
                 self._children.append(child)
@@ -311,14 +315,12 @@ class LocalMqttAguaIOT:
                 raise AguaIOTConnectionError(
                     "Duplicate stove MAC addresses in the device cache."
                 )
-        except Exception:
+        except (Exception, asyncio.CancelledError):
             await self.close()
             raise
 
     async def _subscribe(self) -> None:
         """Use HA MQTT or a per-device endpoint, independently of its provider."""
-        from homeassistant.components import mqtt
-
         if self._unsubscribe is not None:
             return
         settings = self._mqtt_devices.get(str(self.devices[0].id_device), {})
@@ -349,12 +351,22 @@ class LocalMqttAguaIOT:
             self._owns_mqtt = True
             await self._mqtt.start()
         else:
+            if settings.get("write_confirmation"):
+                raise LocalMqttSetupError(
+                    "write_confirmation_requires_host",
+                    "Write confirmations require an explicit MQTT host.",
+                )
+            from homeassistant.components import mqtt
+
             if not await mqtt.async_wait_for_mqtt_client(self.hass):
                 raise LocalMqttSetupError(
                     "mqtt_unavailable",
                     "Configure Home Assistant MQTT or a per-device MQTT endpoint.",
                 )
             self._mqtt = mqtt
+            self._unsubscribe_connection = mqtt.async_subscribe_connection_status(
+                self.hass, self._mqtt_connection_changed
+            )
         # Firmware variants use either the response topic or the command topic.
         # Subscribe only to this stove, never a broker-wide wildcard.
         subscriptions = []
@@ -441,7 +453,7 @@ class LocalMqttAguaIOT:
                 offsets.add(offset)
 
         if not offsets:
-            return [1, 2, 6, 33, 51, 52, 232]
+            raise AguaIOTError("The stove register map contains no readable offsets.")
 
         return sorted(offsets)
 
@@ -532,12 +544,14 @@ class LocalMqttAguaIOT:
             or "UNKNOWN"
         )
         async with self._write_lock:
-            reservation = await reserve_device_write(
+            await self._await_stove_identity()
+            await reserve_device_write(
                 self.hass,
                 device,
                 item_offsets,
                 self._mqtt_devices,
                 explicit_mac=target_mac,
+                limits=self.eeprom_limits,
             )
             cmd = {
                 "mi": str(uuid.uuid4()),
@@ -546,17 +560,7 @@ class LocalMqttAguaIOT:
                 "s": {"ss": "Apk", "sj": self._session_uuid},
                 "pl": payload,
             }
-            _LOGGER.info("Sending RequestWriting to stove: %s", payload)
-            try:
-                await self._send_mqtt_publish(f"navel/{target_mac}", cmd)
-            except Exception as err:
-                if not _delivery_uncertain(err):
-                    await release_device_write(self.hass, device, reservation)
-                raise
-            # Optimistically update cached register values so UI reflects changes immediately
-            for idx, off in enumerate(item_offsets):
-                if idx < len(payload.get("Values", [])):
-                    self._register_values[off] = int(payload["Values"][idx])
+            await self._send_mqtt_publish(f"navel/{target_mac}", cmd)
             await asyncio.sleep(0.5)
             await self._fetch_device_information(device)
 
@@ -592,6 +596,12 @@ class LocalMqttAguaIOT:
                 "No live reading received from the stove."
             ) from err
 
+    @callback
+    def _mqtt_connection_changed(self, connected: bool) -> None:
+        """Reauthenticate on the next poll after a shared MQTT reconnect."""
+        self._identity_ready.clear()
+        self._identity_pending = False
+
     async def _on_mqtt_disconnect(self) -> None:
         """Drop the previous stove handshake when the broker session ends."""
         self._identity_ready.clear()
@@ -605,6 +615,7 @@ class LocalMqttAguaIOT:
 
     async def _authenticate(self) -> None:
         """Authenticate the application session using the stove registration code."""
+        self._identity_pending = True
         await self._send_mqtt_publish(
             f"navel/{self._device_mac}",
             {
@@ -619,7 +630,6 @@ class LocalMqttAguaIOT:
                 },
             },
         )
-        self._identity_pending = True
 
     async def _message_received(self, message) -> None:
         """Handle live stove messages, ignoring retained traffic and our own commands."""
@@ -669,7 +679,9 @@ class LocalMqttAguaIOT:
             await self._authenticate()
         elif cmd == "Identity" and obj.get("mt") == "R":
             self._identity_pending = False
-            self._identity_ready.set()
+            self._identity_ready.clear()
+            if pl.get("Result", 0) == 0 and pl.get("Success", True) is True:
+                self._identity_ready.set()
         elif cmd == "Ping" and obj.get("mt") == "C":
             await self._send_mqtt_publish(
                 f"navel/{self._device_mac}",
@@ -710,6 +722,11 @@ class LocalMqttAguaIOT:
         if self._unsubscribe is not None:
             self._unsubscribe()
             self._unsubscribe = None
+        if self._unsubscribe_connection is not None:
+            self._unsubscribe_connection()
+            self._unsubscribe_connection = None
+        self._identity_ready.clear()
+        self._identity_pending = False
         if self._owns_mqtt:
             await self._mqtt.close()
             self._owns_mqtt = False

@@ -128,6 +128,7 @@ def mqtt_api(monkeypatch):
         async_wait_for_mqtt_client=AsyncMock(return_value=True),
         async_subscribe=AsyncMock(side_effect=unsubscribes),
         async_publish=AsyncMock(),
+        async_subscribe_connection_status=MagicMock(return_value=MagicMock()),
         is_connected=MagicMock(return_value=True),
         unsubscribes=unsubscribes,
     )
@@ -411,6 +412,7 @@ async def test_explicit_mac_uses_shared_ha_mqtt_without_other_integration(mqtt_a
 async def test_eeprom_disabled_blocks_entire_command_before_publish(mqtt_api, payload):
     client = make_test_instance(cached_devices=make_dummy_cached_devices())
     await client.connect()
+    client._identity_ready.set()
     mqtt_api.async_publish.reset_mock()
     client._fetch_device_information = AsyncMock(
         return_value=dict(client._register_values)
@@ -442,6 +444,7 @@ async def test_ram_and_explicit_eeprom_opt_in(mqtt_api, offset, allowed):
         "aguaiot": {"eeprom_budgets": {"DEV_01": MagicMock(reserve=AsyncMock())}}
     }
     await client.connect()
+    client._identity_ready.set()
     mqtt_api.async_publish.reset_mock()
     client._fetch_device_information = AsyncMock(return_value={})
     try:
@@ -460,35 +463,13 @@ async def test_ram_and_explicit_eeprom_opt_in(mqtt_api, offset, allowed):
 
 
 @pytest.mark.asyncio
-async def test_failed_mqtt_publish_returns_the_eeprom_count(
-    mqtt_api, monkeypatch, tmp_path
-):
+async def test_failed_mqtt_publish_keeps_the_eeprom_count(mqtt_api, eeprom_hass):
     eeprom = load_component_module("eeprom")
 
-    class FakeStore:
-        def __init__(self, hass, version, key, **kwargs):
-            self.path = str(tmp_path / key)
-
-        async def async_load(self):
-            try:
-                with open(self.path) as source:  # noqa: ASYNC230 - tiny local test fixture
-                    return json.load(source)["data"]
-            except FileNotFoundError:
-                return None
-
-        async def async_save(self, data):
-            with open(self.path, "w") as target:  # noqa: ASYNC230 - tiny local test fixture
-                json.dump({"data": data}, target)
-
-    async def execute(fn, *args):
-        return fn(*args)
-
-    monkeypatch.setattr(eeprom, "Store", FakeStore)
-    budget = eeprom.EepromBudget(
-        SimpleNamespace(async_add_executor_job=execute), "DEV_01"
-    )
+    budget = eeprom.EepromBudget(eeprom_hass, "DEV_01")
     client = make_test_instance(cached_devices=make_dummy_cached_devices())
     await client.connect()
+    client._identity_ready.set()
     client.hass.data = {"aguaiot": {"eeprom_budgets": {"DEV_01": budget}}}
     mqtt_api.async_publish.reset_mock(side_effect=True)
     mqtt_api.async_publish.side_effect = local_mqtt_module.HomeAssistantError("down")
@@ -498,7 +479,7 @@ async def test_failed_mqtt_publish_returns_the_eeprom_count(
                 client.devices[0],
                 {"Cmd": "RequestWriting", "Items": [32893], "Values": [23]},
             )
-        assert budget.history == []
+        assert len(budget.history) == 1
         mqtt_api.async_publish.side_effect = local_mqtt_module.HomeAssistantError(
             "Delivery is uncertain. The command was not retried."
         )
@@ -507,7 +488,7 @@ async def test_failed_mqtt_publish_returns_the_eeprom_count(
                 client.devices[0],
                 {"Cmd": "RequestWriting", "Items": [32893], "Values": [23]},
             )
-        assert len(budget.history) == 1
+        assert len(budget.history) == 2
         with open(budget.store.path) as saved:  # noqa: ASYNC230 - tiny local test fixture
             assert json.load(saved)["data"] == budget.history
     finally:
@@ -544,3 +525,72 @@ async def test_identity_during_subscription_can_be_answered(mqtt_api):
         assert any(p["mt"] == "A" and p["mi"] == "early" for p in sent)
     finally:
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_shared_mqtt_reconnect_requires_a_new_identity(mqtt_api):
+    client = make_test_instance(cached_devices=make_dummy_cached_devices())
+    await client.connect()
+    client._identity_ready.set()
+    callback = mqtt_api.async_subscribe_connection_status.call_args.args[1]
+    callback(False)
+    assert not client._identity_ready.is_set()
+    callback(True)
+    mqtt_api.async_publish.reset_mock()
+    client.buffer_read_timeout = 0.01
+    with pytest.raises(local_mqtt_module.AguaIOTConnectionError):
+        await client._fetch_device_information(client.devices[0])
+    commands = [
+        json.loads(call.args[2])["pl"]["Cmd"]
+        for call in mqtt_api.async_publish.call_args_list
+    ]
+    assert commands == ["Identity"]
+    await client.close()
+    mqtt_api.async_subscribe_connection_status.return_value.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_two_stoves_keep_registers_and_endpoints_separate(mqtt_api):
+    import copy
+
+    cached = make_dummy_cached_devices()
+    second = copy.deepcopy(cached[0])
+    second.update(id_device="DEV_02", product_serial="112233445566")
+    cached.append(second)
+    mqtt_api.async_subscribe.side_effect = lambda *args, **kwargs: MagicMock()
+    client = make_test_instance(cached_devices=cached)
+    client.eeprom_limits = {
+        "max_eeprom_writes_per_hour": 9,
+        "max_eeprom_writes_per_day": 25,
+    }
+    try:
+        await client.connect()
+        first, second = client._children
+        await first._message_received(
+            message(
+                {
+                    "mt": "R",
+                    "pl": {"Cmd": "RequestReading", "Items": [1], "Values": [240]},
+                }
+            )
+        )
+        assert first._register_values[1] == 240
+        assert 1 not in second._register_values
+        assert first.eeprom_limits == second.eeprom_limits == client.eeprom_limits
+        assert [child._device_mac for child in client._children] == [
+            "A1B2C3D4E5F6",
+            "112233445566",
+        ]
+    finally:
+        await client.close()
+
+
+def test_cached_bit_fields_preserve_all_bits_at_a_shared_offset():
+    client = make_test_instance()
+    client._seed_register_cache_from_map(
+        {
+            "first": {"offset": 32768, "mask": 1, "value_raw": "1"},
+            "second": {"offset": 32768, "mask": 2, "value_raw": "2"},
+        }
+    )
+    assert client._register_values[32768] == 3
