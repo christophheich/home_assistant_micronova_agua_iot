@@ -202,6 +202,46 @@ class TestGetRegisterValue:
         val = device.get_register_value("temp_gas_flue_get")
         assert val == 200
 
+    def test_stove_fix_wins_over_the_parent_flag(self, aguaiot_mock):
+        aguaiot_mock.air_temp_fix = True
+        aguaiot_mock.device_options = {"test": {"air_temp_fix": False}}
+        device = build_device_from_fixture(
+            aguaiot_mock,
+            "test",
+            {
+                "temp_air_get": {
+                    "reg_key": "temp_air_get",
+                    "offset": 1,
+                    "mask": 65535,
+                    "formula": "#",
+                    "formula_inverse": "#",
+                    "value_raw": "200",
+                    "value": 200,
+                }
+            },
+        )
+        assert device.get_register_value("temp_air_get") == 200
+
+    def test_stove_reading_fix_wins_over_the_parent_flag(self, aguaiot_mock):
+        aguaiot_mock.reading_error_fix = False
+        aguaiot_mock._mqtt_devices = {"test": {"reading_error_fix": True}}
+        device = build_device_from_fixture(
+            aguaiot_mock,
+            "test",
+            {
+                "status_get": {
+                    "reg_key": "status_get",
+                    "offset": 1,
+                    "mask": 65535,
+                    "formula": "#",
+                    "formula_inverse": "#",
+                    "value_raw": "32768",
+                    "value": 32768,
+                }
+            },
+        )
+        assert device.get_register_value("status_get") is None
+
 
 class TestGetRegisterValueDescription:
     def test_known_value_returns_description(self, aguaiot_mock):

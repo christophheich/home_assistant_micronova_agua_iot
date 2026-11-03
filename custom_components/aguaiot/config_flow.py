@@ -29,8 +29,6 @@ from .const import (
     CONF_AIR_TEMP_FIX,
     CONF_API_URL,
     CONF_BLE_BOOTSTRAP_DEVICES,
-    CONF_BLE_CHAR_UUID,
-    CONF_BLE_SERVICE_UUID,
     CONF_BRAND,
     CONF_BRAND_ID,
     CONF_BUFFER_READ_TIMEOUT,
@@ -50,9 +48,18 @@ from .const import (
     DOMAIN,
     ENDPOINTS,
 )
-from .local_ble import DEFAULT_CHAR_UUID, DEFAULT_SERVICE_UUID, LocalBleAguaIOT
-from .local_mqtt import LocalMqttAguaIOT, LocalMqttSetupError
-from .stoves import SUBENTRY_STOVE, normalize_stove_settings, stove_settings_by_id
+from .eeprom import (
+    DAILY_CEILING,
+    DAILY_LIMIT,
+    HOURLY_CEILING,
+    HOURLY_LIMIT,
+    whole_count,
+)
+from .stoves import (
+    SUBENTRY_STOVE,
+    account_stove_defaults,
+    normalize_stove_settings,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -174,58 +181,6 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
         """Manage the options."""
         return await self.async_step_user()
 
-    def _build_client(self, connection_mode):
-        """Create the configured cloud, BLE, or local MQTT transport."""
-        entry = self.config_entry
-        # Device fixes are stored in the device_fixes section, legacy entries
-        # stored them flat.
-        device_fixes = entry.options.get(CONF_DEVICE_FIXES) or {}
-        return_kwargs = {
-            "api_url": entry.data.get(CONF_API_URL),
-            "customer_code": entry.data.get(CONF_CUSTOMER_CODE),
-            "email": entry.data.get(CONF_EMAIL),
-            "password": entry.data.get(CONF_PASSWORD),
-            "unique_id": entry.data.get(CONF_UUID),
-            "login_api_url": entry.data.get(CONF_LOGIN_API_URL),
-            "brand_id": entry.data.get(CONF_BRAND_ID),
-            "brand": entry.data.get(CONF_BRAND),
-            "async_client": get_async_client(self.hass),
-            "air_temp_fix": device_fixes.get(
-                CONF_AIR_TEMP_FIX, entry.options.get(CONF_AIR_TEMP_FIX, False)
-            ),
-            "reading_error_fix": device_fixes.get(
-                CONF_READING_ERROR_FIX, entry.options.get(CONF_READING_ERROR_FIX, False)
-            ),
-            "language": self.config_entry.options.get(CONF_LANGUAGE, "ENG"),
-            "http_timeout": self.config_entry.options.get(CONF_HTTP_TIMEOUT, 30),
-            "buffer_read_timeout": self.config_entry.options.get(
-                CONF_BUFFER_READ_TIMEOUT, 30
-            ),
-        }
-
-        if connection_mode == CONNECTION_MODE_BLUETOOTH:
-            return LocalBleAguaIOT(
-                hass=self.hass,
-                cached_devices=entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES),
-                service_uuid=self.config_entry.options.get(
-                    CONF_BLE_SERVICE_UUID, DEFAULT_SERVICE_UUID
-                ),
-                char_uuid=self.config_entry.options.get(
-                    CONF_BLE_CHAR_UUID, DEFAULT_CHAR_UUID
-                ),
-                **return_kwargs,
-            )
-
-        if connection_mode == CONNECTION_MODE_LOCAL_MQTT:
-            return LocalMqttAguaIOT(
-                hass=self.hass,
-                mqtt_devices=stove_settings_by_id(entry),
-                cached_devices=entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES),
-                **return_kwargs,
-            )
-
-        return aguaiot(**return_kwargs)
-
     def _languages(self):
         """Return the available register description languages."""
         languages = ["ENG"]
@@ -246,44 +201,7 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
     def _build_schema(self, user_input=None):
         """Build the options form schema."""
         user_input = user_input or {}
-        # Device fixes are stored in the device_fixes section, legacy entries
-        # stored them flat. Submitted values take precedence over stored ones.
-        submitted_fixes = user_input.get(CONF_DEVICE_FIXES) or {}
-        stored_fixes = self.config_entry.options.get(CONF_DEVICE_FIXES) or {}
-        air_temp_fix_default = submitted_fixes.get(
-            CONF_AIR_TEMP_FIX,
-            stored_fixes.get(
-                CONF_AIR_TEMP_FIX,
-                self.config_entry.options.get(CONF_AIR_TEMP_FIX, False),
-            ),
-        )
-        reading_error_fix_default = submitted_fixes.get(
-            CONF_READING_ERROR_FIX,
-            stored_fixes.get(
-                CONF_READING_ERROR_FIX,
-                self.config_entry.options.get(CONF_READING_ERROR_FIX, False),
-            ),
-        )
         schema = {
-            vol.Optional(
-                CONF_CONNECTION_MODE,
-                default=user_input.get(
-                    CONF_CONNECTION_MODE,
-                    self.config_entry.options.get(
-                        CONF_CONNECTION_MODE, CONNECTION_MODE_CLOUD
-                    ),
-                ),
-            ): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=[
-                        CONNECTION_MODE_CLOUD,
-                        CONNECTION_MODE_BLUETOOTH,
-                        CONNECTION_MODE_LOCAL_MQTT,
-                    ],
-                    mode=selector.SelectSelectorMode.DROPDOWN,
-                    translation_key="connection_mode",
-                )
-            ),
             vol.Optional(
                 CONF_UPDATE_INTERVAL,
                 default=user_input.get(
@@ -312,21 +230,6 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
                     self.config_entry.options.get(CONF_LANGUAGE, "ENG"),
                 ),
             ): vol.In(self._languages()),
-            CONF_DEVICE_FIXES: section(
-                vol.Schema(
-                    {
-                        vol.Optional(
-                            CONF_AIR_TEMP_FIX,
-                            default=air_temp_fix_default,
-                        ): bool,
-                        vol.Optional(
-                            CONF_READING_ERROR_FIX,
-                            default=reading_error_fix_default,
-                        ): bool,
-                    }
-                ),
-                options={"collapsed": True},
-            ),
         }
         for name, keys in (
             (
@@ -351,60 +254,87 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
 
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
-        errors = {}
-
         if user_input is not None:
             user_input = {
                 **self.config_entry.options,
                 **flatten_connection_options(user_input),
             }
-            user_input.pop("configure_mqtt", None)
-            user_input.pop("mqtt_devices", None)
-            connection_mode = user_input.get(
+            for key in (
+                "configure_mqtt",
+                "mqtt_devices",
                 CONF_CONNECTION_MODE,
-                self.config_entry.options.get(
-                    CONF_CONNECTION_MODE, CONNECTION_MODE_CLOUD
-                ),
-            )
-            agua = None
-            try:
-                agua = self._build_client(connection_mode)
-                await agua.connect()
-                if connection_mode in (
-                    CONNECTION_MODE_BLUETOOTH,
-                    CONNECTION_MODE_LOCAL_MQTT,
-                ):
-                    await agua.validate_local_connection()
-            except AguaIOTUnauthorized as e:
-                _LOGGER.error("Agua IOT Unauthorized: %s", e)
-                errors["base"] = "unauthorized"
-            except LocalMqttSetupError as e:
-                errors["base"] = e.key
-            except AguaIOTConnectionError as e:
-                _LOGGER.error("Agua IOT Connection error: %s", e)
-                errors["base"] = "connection_error"
-            except AguaIOTError as e:
-                _LOGGER.error("Agua IOT error: %s", e)
-                errors["base"] = "unknown_error"
-            else:
-                return self.async_create_entry(title="", data=user_input)
-            finally:
-                if agua and hasattr(agua, "close"):
-                    await agua.close()
+                CONF_DEVICE_FIXES,
+                CONF_AIR_TEMP_FIX,
+                CONF_READING_ERROR_FIX,
+            ):
+                user_input.pop(key, None)
+            return self.async_create_entry(title="", data=user_input)
 
         return self.async_show_form(
             step_id="user",
             data_schema=self._build_schema(user_input),
-            errors=errors,
         )
+
+
+def _shown_limit(value, fallback, ceiling):
+    """Keep a typed limit on the form. An unusable value falls back."""
+    number = whole_count(value)
+    if number is None or not 1 <= number <= ceiling:
+        return fallback
+    return number
+
+
+def _limit_selector(ceiling):
+    return selector.NumberSelector(
+        selector.NumberSelectorConfig(
+            min=1,
+            max=ceiling,
+            step=1,
+            mode=selector.NumberSelectorMode.BOX,
+        )
+    )
+
+
+def _connection_default(defaults):
+    mode = defaults.get(CONF_CONNECTION_MODE, CONNECTION_MODE_CLOUD)
+    if mode not in (
+        CONNECTION_MODE_CLOUD,
+        CONNECTION_MODE_BLUETOOTH,
+        CONNECTION_MODE_LOCAL_MQTT,
+    ):
+        return CONNECTION_MODE_CLOUD
+    return mode
 
 
 def _stove_form_schema(defaults):
     """Build the stove form. A blank password field keeps the saved password."""
     defaults = dict(defaults)
     defaults.pop("password", None)
+    hour = _shown_limit(
+        defaults.get("max_eeprom_writes_per_hour", HOURLY_LIMIT),
+        HOURLY_LIMIT,
+        HOURLY_CEILING,
+    )
+    day = _shown_limit(
+        defaults.get("max_eeprom_writes_per_day", DAILY_LIMIT),
+        DAILY_LIMIT,
+        DAILY_CEILING,
+    )
     return vol.Schema(
         {
+            vol.Required(
+                CONF_CONNECTION_MODE, default=_connection_default(defaults)
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        CONNECTION_MODE_CLOUD,
+                        CONNECTION_MODE_BLUETOOTH,
+                        CONNECTION_MODE_LOCAL_MQTT,
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                    translation_key="connection_mode",
+                )
+            ),
             vol.Required("device_mac", default=defaults.get("device_mac", "")): str,
             vol.Optional("hostname", default=defaults.get("hostname", "")): str,
             vol.Required("port", default=defaults.get("port", 1883)): vol.All(
@@ -414,10 +344,31 @@ def _stove_form_schema(defaults):
             vol.Optional("password"): selector.TextSelector(
                 selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
             ),
+            vol.Optional(CONF_DEVICE_FIXES): section(
+                vol.Schema(
+                    {
+                        vol.Optional(
+                            CONF_AIR_TEMP_FIX,
+                            default=defaults.get(CONF_AIR_TEMP_FIX, False) is True,
+                        ): bool,
+                        vol.Optional(
+                            CONF_READING_ERROR_FIX,
+                            default=defaults.get(CONF_READING_ERROR_FIX, False) is True,
+                        ): bool,
+                    }
+                ),
+                options={"collapsed": True},
+            ),
             vol.Optional(
                 "allow_eeprom_writes",
                 default=defaults.get("allow_eeprom_writes", True),
             ): selector.BooleanSelector(),
+            vol.Required("max_eeprom_writes_per_hour", default=hour): _limit_selector(
+                HOURLY_CEILING
+            ),
+            vol.Required("max_eeprom_writes_per_day", default=day): _limit_selector(
+                DAILY_CEILING
+            ),
             vol.Optional(
                 "write_confirmation",
                 default=defaults.get("write_confirmation", False),
@@ -426,8 +377,16 @@ def _stove_form_schema(defaults):
     )
 
 
+def _flatten_stove_input(user_input):
+    values = dict(user_input)
+    fixes = values.pop(CONF_DEVICE_FIXES, None)
+    if isinstance(fixes, dict):
+        values.update(fixes)
+    return values
+
+
 class StoveSubentryFlow(ConfigSubentryFlow):
-    """Add or edit the MQTT connection and EEPROM switch for one stove."""
+    """Add or edit the connection, fixes and EEPROM limits for one stove."""
 
     def _entry(self):
         return self._get_entry()
@@ -501,7 +460,7 @@ class StoveSubentryFlow(ConfigSubentryFlow):
         errors = {}
         if user_input is not None:
             values, errors = normalize_stove_settings(
-                entry, self._device_id, user_input, stored
+                entry, self._device_id, _flatten_stove_input(user_input), stored
             )
             if not errors:
                 if subentry is not None:
@@ -522,7 +481,9 @@ class StoveSubentryFlow(ConfigSubentryFlow):
                     reason="reconfigure_successful",
                     translation_domain="homeassistant",
                 )
-        shown = {**stored, **(user_input or {})}
+        shown = {**account_stove_defaults(entry), **stored}
+        if user_input:
+            shown.update(_flatten_stove_input(user_input))
         shown.pop("password", None)
         return self.async_show_form(
             step_id="reconfigure",

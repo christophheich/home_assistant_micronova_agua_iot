@@ -29,18 +29,8 @@
     "step": {
       "user": {
         "title": "Micronova Agua IOT options",
-        "description": "Choose Cloud, Bluetooth or local MQTT. Set the MQTT host, port and EEPROM permission on the stove.",
-        "data": {
-          "connection_mode": "Connection"
-        },
+        "description": "Language, timeouts and the update interval apply to every stove. Set Cloud, Bluetooth or local MQTT, and the Jolly Mec and Bronpi fixes, on the stove row.",
         "sections": {
-          "device_fixes": {
-            "name": "Device specific fixes",
-            "data": {
-              "air_temp_fix": "[Jolly Mec] Ignore incorrect air temperature when using external thermostat.",
-              "reading_error_fix": "[Bronpi] Filter incorrect readings (when stove is without power)."
-            }
-          },
           "advanced_connection": {
             "name": "Advanced connection settings",
             "data": {
@@ -68,10 +58,14 @@
           "username": "Username",
           "password": "Password",
           "write_confirmation": "Require application write receipt",
-          "allow_eeprom_writes": "Allow EEPROM writes"
+          "allow_eeprom_writes": "Allow EEPROM writes",
+            "max_eeprom_writes_per_hour": "Commands per hour",
+            "max_eeprom_writes_per_day": "Commands per day"
         },
         "data_description": {
-          "allow_eeprom_writes": "On by default. 3 commands per hour and 5 commands per day per stove, shared by cloud, Bluetooth and local MQTT. Cloud and Bluetooth give the count back when the write fails. MQTT gives it back only when the command was not sent. Turn off to block these writes from this integration."
+          "allow_eeprom_writes": "On by default. The default is 3 commands per hour and 5 commands per day per stove. On this row you can raise that to 15 per hour and 50 per day. The hourly value stays at or below the daily value. Cloud, Bluetooth and local MQTT share the count. Cloud and Bluetooth give the count back when the write fails. MQTT gives it back only when the command was not sent. Turn off to block these writes from this integration.",
+          "max_eeprom_writes_per_hour": "Default 3. Highest value is 15. Stays at or below the daily value.",
+          "max_eeprom_writes_per_day": "Default 5. Highest value is 50."
         }
       }
     },
@@ -81,7 +75,8 @@
       "unauthorized": "Failed to login, please check credentials.",
       "unknown_error": "Unknown error, please double check configuration.",
       "mqtt_unavailable": "Configure Home Assistant MQTT or enter a per-stove endpoint.",
-      "invalid_mac": "Enter a unique Wi-Fi MAC address with 12 hexadecimal digits."
+      "invalid_mac": "Enter a unique Wi-Fi MAC address with 12 hexadecimal digits.",
+        "invalid_limits": "Use a whole number from 1 to 15 per hour and 1 to 50 per day. The hourly value stays at or below the daily value."
     },
     "abort": {
       "no_cached_devices": "Connect through the cloud once to cache the stove metadata."
@@ -112,23 +107,40 @@
         },
         "reconfigure": {
           "title": "Stove connection and EEPROM",
-          "description": "Leave the host empty to use Home Assistant MQTT. Password blank keeps the saved password. Application write receipts must be supported by the endpoint. Leave them disabled for ordinary brokers.",
+          "description": "Leave the host empty to use Home Assistant MQTT. Password blank keeps the saved password. Application write receipts must be supported by the endpoint. Leave them disabled for ordinary brokers. Connection, the Jolly Mec fix and the Bronpi fix apply to this stove alone.",
           "data": {
+            "connection_mode": "Connection",
             "device_mac": "Wi-Fi MAC address",
             "hostname": "MQTT host",
             "port": "Port",
             "username": "Username",
             "password": "Password",
             "write_confirmation": "Require application write receipt",
-            "allow_eeprom_writes": "Allow EEPROM writes"
+            "allow_eeprom_writes": "Allow EEPROM writes",
+            "max_eeprom_writes_per_hour": "Commands per hour",
+            "max_eeprom_writes_per_day": "Commands per day"
+          },
+          "sections": {
+            "device_fixes": {
+              "name": "Device specific fixes",
+              "data": {
+                "air_temp_fix": "[Jolly Mec] Ignore incorrect air temperature when using external thermostat.",
+                "reading_error_fix": "[Bronpi] Filter incorrect readings (when stove is without power)."
+              }
+            }
           },
           "data_description": {
-            "allow_eeprom_writes": "On by default. 3 commands per hour and 5 commands per day per stove, shared by cloud, Bluetooth and local MQTT. Cloud and Bluetooth give the count back when the write fails. MQTT gives it back only when the command was not sent. Turn off to block these writes from this integration."
+            "device_mac": "Required for local MQTT. Cloud and Bluetooth can leave this empty. An entered address stays unique.",
+            "allow_eeprom_writes": "On by default. The default is 3 commands per hour and 5 commands per day per stove. On this row you can raise that to 15 per hour and 50 per day. The hourly value stays at or below the daily value. Cloud, Bluetooth and local MQTT share the count. Cloud and Bluetooth give the count back when the write fails. MQTT gives it back only when the command was not sent. Turn off to block these writes from this integration.",
+          "max_eeprom_writes_per_hour": "Default 3. Highest value is 15. Stays at or below the daily value.",
+          "max_eeprom_writes_per_day": "Default 5. Highest value is 50."
           }
         }
       },
       "error": {
-        "invalid_mac": "Enter a unique Wi-Fi MAC address with 12 hexadecimal digits."
+        "invalid_mac": "Enter a unique Wi-Fi MAC address with 12 hexadecimal digits.",
+        "invalid_limits": "Use a whole number from 1 to 15 per hour and 1 to 50 per day. The hourly value stays at or below the daily value.",
+        "invalid_connection": "Choose Cloud, Bluetooth or local MQTT for this stove."
       },
       "abort": {
         "no_cached_devices": "Connect through the cloud once to cache the stove metadata.",

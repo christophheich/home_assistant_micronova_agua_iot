@@ -194,6 +194,7 @@ class LocalBleAguaIOT:
         char_uuid: str = DEFAULT_CHAR_UUID,
         cached_devices: list[dict[str, Any]] | None = None,
         device_options: dict | None = None,
+        only_device_ids: set | None = None,
     ) -> None:
         self.hass = hass
         self.api_url = api_url.rstrip("/")
@@ -218,6 +219,11 @@ class LocalBleAguaIOT:
         self._session_uuid = str(uuid.uuid4()).upper()
         self._cached_devices = cached_devices or []
         self.device_options = device_options or {}
+        self._only_device_ids = (
+            None
+            if only_device_ids is None
+            else {str(device_id) for device_id in only_device_ids}
+        )
         self._cache_dirty = False
         self._command_lock = asyncio.Lock()
 
@@ -236,11 +242,28 @@ class LocalBleAguaIOT:
 
     async def connect(self) -> None:
         """Initialize devices from cache, or bootstrap once through the cloud API."""
-        if self._cached_devices:
-            self._load_cached_devices(self._cached_devices)
+        cached = self._cached_devices
+        if self._only_device_ids is not None:
+            cached = [
+                device
+                for device in cached
+                if isinstance(device, dict)
+                and str(device.get("id_device") or "") in self._only_device_ids
+            ]
+        if cached:
+            self._load_cached_devices(cached)
             return
 
         await self._bootstrap_from_cloud()
+        if self._only_device_ids is None:
+            return
+        self.devices = [
+            device
+            for device in self.devices
+            if str(device.id_device) in self._only_device_ids
+        ]
+        if not self.devices:
+            raise AguaIOTError("No stove is configured for Bluetooth.")
 
     async def fetch_device_information(self) -> None:
         """Compatibility helper with the cloud transport."""

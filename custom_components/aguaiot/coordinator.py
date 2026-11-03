@@ -16,18 +16,14 @@ from .aguaiot import (
     AguaIOTError,
     AguaIOTUnauthorized,
     AguaIOTUpdateError,
-    aguaiot,
 )
 from .const import (
     CONF_AIR_TEMP_FIX,
     CONF_API_URL,
     CONF_BLE_BOOTSTRAP_DEVICES,
-    CONF_BLE_CHAR_UUID,
-    CONF_BLE_SERVICE_UUID,
     CONF_BRAND,
     CONF_BRAND_ID,
     CONF_BUFFER_READ_TIMEOUT,
-    CONF_CONNECTION_MODE,
     CONF_CUSTOMER_CODE,
     CONF_DEVICE_FIXES,
     CONF_HTTP_TIMEOUT,
@@ -36,14 +32,11 @@ from .const import (
     CONF_READING_ERROR_FIX,
     CONF_UPDATE_INTERVAL,
     CONF_UUID,
-    CONNECTION_MODE_BLUETOOTH,
     CONNECTION_MODE_CLOUD,
-    CONNECTION_MODE_LOCAL_MQTT,
     DOMAIN,
 )
-from .local_ble import DEFAULT_CHAR_UUID, DEFAULT_SERVICE_UUID, LocalBleAguaIOT
-from .local_mqtt import LocalMqttAguaIOT
-from .stoves import stove_settings_by_id
+from .router import StoveRouter, build_transport
+from .stoves import stove_connection_mode, stove_settings_by_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,9 +82,6 @@ class AguaIOTDataUpdateCoordinator(DataUpdateCoordinator):
         language = config_entry.options.get(CONF_LANGUAGE)
         http_timeout = config_entry.options.get(CONF_HTTP_TIMEOUT, 30)
         buffer_read_timeout = config_entry.options.get(CONF_BUFFER_READ_TIMEOUT, 30)
-        connection_mode = config_entry.options.get(
-            CONF_CONNECTION_MODE, CONNECTION_MODE_CLOUD
-        )
 
         client_kwargs = {
             "api_url": api_url,
@@ -109,39 +99,21 @@ class AguaIOTDataUpdateCoordinator(DataUpdateCoordinator):
             "http_timeout": http_timeout,
             "buffer_read_timeout": buffer_read_timeout,
         }
-
-        device_options = stove_settings_by_id(config_entry)
-        if connection_mode == CONNECTION_MODE_BLUETOOTH:
-            self.agua = LocalBleAguaIOT(
-                hass=hass,
-                cached_devices=config_entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES),
-                service_uuid=config_entry.options.get(
-                    CONF_BLE_SERVICE_UUID, DEFAULT_SERVICE_UUID
-                ),
-                char_uuid=config_entry.options.get(
-                    CONF_BLE_CHAR_UUID, DEFAULT_CHAR_UUID
-                ),
-                device_options=device_options,
-                **client_kwargs,
-            )
-        elif connection_mode == CONNECTION_MODE_LOCAL_MQTT:
-            self.agua = LocalMqttAguaIOT(
-                hass=hass,
-                mqtt_devices=device_options,
-                cached_devices=config_entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES),
-                **client_kwargs,
-            )
-        else:
-            self.agua = aguaiot(
-                **client_kwargs, hass=hass, device_options=device_options
-            )
+        self.agua = build_transport(hass, config_entry, client_kwargs)
 
     @property
-    def connection_mode(self) -> str:
-        """Return the active connection mode."""
-        return self.config_entry.options.get(
-            CONF_CONNECTION_MODE, CONNECTION_MODE_CLOUD
-        )
+    def connection_mode(self) -> str | None:
+        """Return the one connection every stove shares, or None when they differ."""
+        settings = stove_settings_by_id(self.config_entry)
+        if not settings:
+            return stove_connection_mode(self.config_entry, {})
+        modes = {
+            stove_connection_mode(self.config_entry, stove)
+            for stove in settings.values()
+        }
+        if len(modes) == 1:
+            return modes.pop()
+        return None
 
     async def _async_setup(self) -> None:
         """Connect to the AguaIOT platform"""
@@ -180,8 +152,35 @@ class AguaIOTDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_persist_ble_bootstrap_if_needed(self) -> None:
         """Persist bootstrap data when it is freshly learned from the cloud."""
         # Cache register metadata for later local connections.
-        # Cache maps after the first successful cloud refresh, without requiring
-        # an attempted switch to a local transport first.
+        # A mixed account merges by stove id, so one failed connection cannot
+        # drop the cache of the stoves that are still up.
+        if isinstance(self.agua, StoveRouter):
+            cache = self.config_entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES) or []
+            if not isinstance(cache, list):
+                cache = []
+            current = {
+                str(device.get("id_device")): device
+                for device in cache
+                if isinstance(device, dict)
+            }
+            exported = {
+                str(device.get("id_device")): device
+                for device in self.agua.export_bootstrap_cache()
+                if isinstance(device, dict)
+            }
+            if not exported:
+                return
+            merged = {**current, **exported}
+            if merged != current:
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry,
+                    data={
+                        **self.config_entry.data,
+                        CONF_BLE_BOOTSTRAP_DEVICES: list(merged.values()),
+                    },
+                )
+            self.agua.mark_cache_persisted()
+            return
         if self.connection_mode == CONNECTION_MODE_CLOUD:
             devices = [device.export_cache() for device in self.agua.devices]
             if (

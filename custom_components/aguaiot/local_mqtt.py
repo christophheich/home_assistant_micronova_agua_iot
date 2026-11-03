@@ -73,6 +73,7 @@ class LocalMqttAguaIOT:
         buffer_read_timeout: int | None = 30,
         mqtt_devices: dict | None = None,
         cached_devices: list[dict[str, Any]] | None = None,
+        only_device_ids: set | None = None,
     ) -> None:
         self.hass = hass
         self.api_url = api_url.rstrip("/")
@@ -95,6 +96,11 @@ class LocalMqttAguaIOT:
         self._session_uuid = str(uuid.uuid4()).upper()
         self._mqtt_devices = mqtt_devices or {}
         self._cached_devices = cached_devices or []
+        self._only_device_ids = (
+            None
+            if only_device_ids is None
+            else {str(device_id) for device_id in only_device_ids}
+        )
         self._cache_dirty = False
         self._children = []
 
@@ -243,17 +249,41 @@ class LocalMqttAguaIOT:
             return register_map
         raise AguaIOTError(f"No cached registers map found for '{device.name}'")
 
+    def _matching_cached(self, cached_devices):
+        if self._only_device_ids is None:
+            return list(cached_devices)
+        return [
+            device
+            for device in cached_devices
+            if isinstance(device, dict)
+            and str(device.get("id_device") or "") in self._only_device_ids
+        ]
+
+    def _matching_devices(self, devices):
+        if self._only_device_ids is None:
+            return list(devices)
+        return [
+            device
+            for device in devices
+            if str(device.id_device) in self._only_device_ids
+        ]
+
     async def connect(self) -> None:
         """Initialize devices and subscribe through Home Assistant MQTT."""
         if self._children:
             return
-        if len(self._cached_devices) > 1:
-            await self._connect_children(self._cached_devices)
+        cached = self._matching_cached(self._cached_devices)
+        if len(cached) > 1:
+            await self._connect_children(cached)
             return
-        if self._cached_devices:
-            self._load_cached_devices(self._cached_devices)
+        if cached:
+            self._load_cached_devices(cached)
         else:
             await self._bootstrap_from_cloud()
+            if self._only_device_ids is not None:
+                self.devices = self._matching_devices(self.devices)
+                if not self.devices:
+                    raise AguaIOTError("No stove is configured for local MQTT.")
             if len(self.devices) > 1:
                 await self._connect_children(self.export_bootstrap_cache())
                 return

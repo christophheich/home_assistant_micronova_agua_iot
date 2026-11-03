@@ -29,17 +29,7 @@
     "step": {
       "user": {
         "title": "Micronova Agua IOT Optionen",
-        "data": {
-          "connection_mode": "Verbindung"
-        },
         "sections": {
-          "device_fixes": {
-            "name": "Gerätespezifische Korrekturen",
-            "data": {
-              "air_temp_fix": "[Jolly Mec] Inkorrekte Lufttemperatur bei Verwendung eines externen Thermostats ignorieren.",
-              "reading_error_fix": "[Bronpi] Inkorrekte Messwerte filtern (wenn der Ofen ohne Strom ist)."
-            }
-          },
           "advanced_connection": {
             "name": "Erweiterte Verbindungseinstellungen",
             "data": {
@@ -50,7 +40,7 @@
             }
           }
         },
-        "description": "Wähle Cloud, Bluetooth oder lokales MQTT. MQTT-Host, Port und EEPROM stellst du am Ofen ein."
+        "description": "Sprache, Zeitlimits und das Aktualisierungsintervall gelten für jeden Ofen. Cloud, Bluetooth oder lokales MQTT sowie die Korrekturen für Jolly Mec und Bronpi stellst du am Ofen ein."
       },
       "mqtt_device": {
         "title": "Ofen auswählen",
@@ -68,10 +58,14 @@
           "username": "Benutzername",
           "password": "Passwort",
           "write_confirmation": "Anwendungsbestätigung für Schreibbefehle verlangen",
-          "allow_eeprom_writes": "EEPROM-Schreibzugriffe erlauben"
+          "allow_eeprom_writes": "EEPROM-Schreibzugriffe erlauben",
+            "max_eeprom_writes_per_hour": "Schreibzugriffe pro Stunde",
+            "max_eeprom_writes_per_day": "Schreibzugriffe pro Tag"
         },
         "data_description": {
-          "allow_eeprom_writes": "Standardmäßig an. 3 Befehle pro Stunde und 5 Befehle pro Tag je Ofen, gemeinsam für Cloud, Bluetooth und lokales MQTT. Cloud und Bluetooth geben den Zähler bei einem Fehler zurück. MQTT gibt ihn nur zurück, wenn der Befehl nicht gesendet wurde. Aus sperrt diese Schreibzugriffe dieser Integration."
+          "allow_eeprom_writes": "Standardmäßig an. Die Vorgabe ist 3 Befehle pro Stunde und 5 Befehle pro Tag je Ofen. In dieser Zeile kannst du das auf bis zu 15 pro Stunde und 50 pro Tag anheben. Der Stundenwert bleibt höchstens so hoch wie der Tageswert. Cloud, Bluetooth und lokales MQTT teilen sich den Zähler. Cloud und Bluetooth geben den Zähler bei einem Fehler zurück. MQTT gibt ihn nur zurück, wenn der Befehl nicht gesendet wurde. Aus sperrt diese Schreibzugriffe dieser Integration.",
+          "max_eeprom_writes_per_hour": "Vorgabe ist 3. Höchster Wert ist 15. Bleibt höchstens so hoch wie der Tageswert.",
+          "max_eeprom_writes_per_day": "Vorgabe ist 5. Höchster Wert ist 50."
         }
       }
     },
@@ -81,7 +75,8 @@
       "unauthorized": "Anmeldung fehlgeschlagen, bitte überprüfen Sie die Anmeldedaten.",
       "unknown_error": "Unbekannter Fehler, bitte die Einstellung überprüfen.",
       "mqtt_unavailable": "Richte Home Assistant MQTT ein oder hinterlege einen Endpunkt pro Ofen.",
-      "invalid_mac": "Trage eine eindeutige WLAN-MAC-Adresse mit 12 Hexadezimalstellen ein."
+      "invalid_mac": "Trage eine eindeutige WLAN-MAC-Adresse mit 12 Hexadezimalstellen ein.",
+        "invalid_limits": "Nutze eine ganze Zahl von 1 bis 15 pro Stunde und 1 bis 50 pro Tag. Der Stundenwert bleibt höchstens so hoch wie der Tageswert."
     },
     "abort": {
       "no_cached_devices": "Verbinde dich einmal über die Cloud, um die Ofendaten zu speichern."
@@ -112,23 +107,40 @@
         },
         "reconfigure": {
           "title": "Verbindung und EEPROM",
-          "description": "Host leer lassen, um Home Assistant MQTT zu nutzen. Ein leeres Passwort behält das gespeicherte Passwort bei. Schreibbestätigungen müssen vom Endpunkt unterstützt werden. Bei normalen Brokern ausgeschaltet lassen.",
+          "description": "Host leer lassen, um Home Assistant MQTT zu nutzen. Ein leeres Passwort behält das gespeicherte Passwort bei. Schreibbestätigungen müssen vom Endpunkt unterstützt werden. Bei normalen Brokern ausgeschaltet lassen. Verbindung, die Korrektur für Jolly Mec und die Korrektur für Bronpi gelten nur für diesen Ofen.",
           "data": {
+            "connection_mode": "Verbindung",
             "device_mac": "WLAN-MAC-Adresse",
             "hostname": "MQTT-Host",
             "port": "Port",
             "username": "Benutzername",
             "password": "Passwort",
             "write_confirmation": "Anwendungsbestätigung für Schreibbefehle verlangen",
-            "allow_eeprom_writes": "EEPROM-Schreibzugriffe erlauben"
+            "allow_eeprom_writes": "EEPROM-Schreibzugriffe erlauben",
+            "max_eeprom_writes_per_hour": "Schreibzugriffe pro Stunde",
+            "max_eeprom_writes_per_day": "Schreibzugriffe pro Tag"
+          },
+          "sections": {
+            "device_fixes": {
+              "name": "Gerätespezifische Korrekturen",
+              "data": {
+                "air_temp_fix": "[Jolly Mec] Inkorrekte Lufttemperatur bei Verwendung eines externen Thermostats ignorieren.",
+                "reading_error_fix": "[Bronpi] Inkorrekte Messwerte filtern (wenn der Ofen ohne Strom ist)."
+              }
+            }
           },
           "data_description": {
-            "allow_eeprom_writes": "Standardmäßig an. 3 Befehle pro Stunde und 5 Befehle pro Tag je Ofen, gemeinsam für Cloud, Bluetooth und lokales MQTT. Cloud und Bluetooth geben den Zähler bei einem Fehler zurück. MQTT gibt ihn nur zurück, wenn der Befehl nicht gesendet wurde. Aus sperrt diese Schreibzugriffe dieser Integration."
+            "device_mac": "Für lokales MQTT nötig. Cloud und Bluetooth dürfen das Feld leer lassen. Eine eingetragene Adresse bleibt eindeutig.",
+            "allow_eeprom_writes": "Standardmäßig an. Die Vorgabe ist 3 Befehle pro Stunde und 5 Befehle pro Tag je Ofen. In dieser Zeile kannst du das auf bis zu 15 pro Stunde und 50 pro Tag anheben. Der Stundenwert bleibt höchstens so hoch wie der Tageswert. Cloud, Bluetooth und lokales MQTT teilen sich den Zähler. Cloud und Bluetooth geben den Zähler bei einem Fehler zurück. MQTT gibt ihn nur zurück, wenn der Befehl nicht gesendet wurde. Aus sperrt diese Schreibzugriffe dieser Integration.",
+          "max_eeprom_writes_per_hour": "Vorgabe ist 3. Höchster Wert ist 15. Bleibt höchstens so hoch wie der Tageswert.",
+          "max_eeprom_writes_per_day": "Vorgabe ist 5. Höchster Wert ist 50."
           }
         }
       },
       "error": {
-        "invalid_mac": "Trage eine eindeutige WLAN-MAC-Adresse mit 12 Hexadezimalstellen ein."
+        "invalid_mac": "Trage eine eindeutige WLAN-MAC-Adresse mit 12 Hexadezimalstellen ein.",
+        "invalid_limits": "Nutze eine ganze Zahl von 1 bis 15 pro Stunde und 1 bis 50 pro Tag. Der Stundenwert bleibt höchstens so hoch wie der Tageswert.",
+        "invalid_connection": "Wähle Cloud, Bluetooth oder lokales MQTT für diesen Ofen."
       },
       "abort": {
         "no_cached_devices": "Verbinde dich einmal über die Cloud, um die Ofendaten zu speichern.",

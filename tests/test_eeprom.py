@@ -162,6 +162,107 @@ async def test_failed_release_keeps_the_reservation(budget_env, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_raised_limit_is_what_reserve_enforces(budget_env):
+    hass, _now = budget_env
+    hass.data = {}
+    device = SimpleNamespace(id_device="DEV_01")
+    low = {
+        "DEV_01": {
+            "max_eeprom_writes_per_hour": 3,
+            "max_eeprom_writes_per_day": 5,
+        }
+    }
+    for _ in range(3):
+        await eeprom.reserve_device_write(hass, device, [32768], low)
+    with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
+        await eeprom.reserve_device_write(hass, device, [32768], low)
+    raised = {
+        "DEV_01": {
+            "max_eeprom_writes_per_hour": 4,
+            "max_eeprom_writes_per_day": 4,
+        }
+    }
+    await eeprom.reserve_device_write(hass, device, [32768], raised)
+    with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
+        await eeprom.reserve_device_write(hass, device, [32768], raised)
+
+
+@pytest.mark.asyncio
+async def test_missing_limits_stay_at_the_default(budget_env):
+    hass, _now = budget_env
+    hass.data = {}
+    device = SimpleNamespace(id_device="DEV_01")
+    for _ in range(eeprom.HOURLY_LIMIT):
+        await eeprom.reserve_device_write(hass, device, [32768], {"DEV_01": {}})
+    with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
+        await eeprom.reserve_device_write(hass, device, [32768], {"DEV_01": {}})
+
+
+@pytest.mark.asyncio
+async def test_one_and_one_stays_a_valid_limit(budget_env):
+    hass, _now = budget_env
+    hass.data = {}
+    device = SimpleNamespace(id_device="DEV_01")
+    options = {
+        "DEV_01": {
+            "max_eeprom_writes_per_hour": 1,
+            "max_eeprom_writes_per_day": 1,
+        }
+    }
+    await eeprom.reserve_device_write(hass, device, [32768], options)
+    with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
+        await eeprom.reserve_device_write(hass, device, [32768], options)
+
+
+@pytest.mark.asyncio
+async def test_ceiling_accepts_15_and_50_and_rejects_the_pair_above_it(budget_env):
+    hass, now = budget_env
+    hass.data = {}
+    device = SimpleNamespace(id_device="DEV_01")
+    ceiling = {
+        "DEV_01": {
+            "max_eeprom_writes_per_hour": 15,
+            "max_eeprom_writes_per_day": 50,
+        }
+    }
+    for _ in range(15):
+        await eeprom.reserve_device_write(hass, device, [32768], ceiling)
+    with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
+        await eeprom.reserve_device_write(hass, device, [32768], ceiling)
+    now[0] += 86400
+    above = {
+        "DEV_01": {
+            "max_eeprom_writes_per_hour": 16,
+            "max_eeprom_writes_per_day": 50,
+        }
+    }
+    for _ in range(eeprom.HOURLY_LIMIT):
+        await eeprom.reserve_device_write(hass, device, [32768], above)
+    with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
+        await eeprom.reserve_device_write(hass, device, [32768], above)
+
+
+@pytest.mark.asyncio
+async def test_invalid_stored_pair_keeps_the_default(budget_env):
+    hass, _now = budget_env
+    hass.data = {}
+    device = SimpleNamespace(id_device="DEV_01")
+    invalid = {
+        "DEV_01": {
+            "max_eeprom_writes_per_hour": 2,
+            "max_eeprom_writes_per_day": 1,
+        }
+    }
+    for _ in range(eeprom.HOURLY_LIMIT):
+        await eeprom.reserve_device_write(hass, device, [32768], invalid)
+    with pytest.raises(eeprom.AguaIOTError, match="limit reached"):
+        await eeprom.reserve_device_write(hass, device, [32768], invalid)
+    assert eeprom.checked_limits(True, 5) is None
+    assert eeprom.checked_limits("15.0", "50") == (15, 50)
+    assert eeprom.checked_limits("15.5", 50) is None
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("data", ["bad", [True], [float("nan")], [-1]])
 async def test_invalid_history_blocks_writes(budget_env, data):
     hass, _ = budget_env

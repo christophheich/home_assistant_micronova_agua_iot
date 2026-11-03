@@ -34,6 +34,7 @@ from .const import (
     STATUS_OFF,
     WATER_VARIANTS,
 )
+from .stoves import add_stove_entities
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                         AguaIOTCanalizationDevice(coordinator, device, c_copy, stove)
                     )
 
-    async_add_entities(entities, True)
+    add_stove_entities(config_entry, async_add_entities, entities)
 
     platform = entity_platform.async_get_current_platform()
     platform.async_register_entity_service(

@@ -545,7 +545,7 @@ class Device:
                 # Fix for reading errors from wifi module. Check the raw word,
                 # as masks and formulas hide the failed read value.
                 if (
-                    self.__aguaiot.reading_error_fix
+                    self._stove_flag("reading_error_fix")
                     and int(raw_value) == READING_ERROR_VALUE
                 ):
                     _LOGGER.debug(
@@ -641,12 +641,25 @@ class Device:
     def get_register(self, key):
         return self.__register_dict.get(key, {})
 
+    def _stove_flag(self, key):
+        """Use the stove's own fix. Fall back to the client flag when it has none."""
+        parent = self.__aguaiot
+        options = getattr(parent, "device_options", None)
+        if not isinstance(options, dict) or not options:
+            options = getattr(parent, "_mqtt_devices", None)
+        settings = {}
+        if isinstance(options, dict):
+            settings = options.get(str(self.id_device), {}) or {}
+        if isinstance(settings, dict) and key in settings:
+            return settings[key] is True
+        return getattr(parent, key, False) is True
+
     def get_register_value(self, key):
         value = self.get_register(key).get("value")
 
         # Fix for stoves abusing air temp register
         if (
-            self.__aguaiot.air_temp_fix
+            self._stove_flag("air_temp_fix")
             and key.endswith("air_get")
             and value
             and int(value) > 100

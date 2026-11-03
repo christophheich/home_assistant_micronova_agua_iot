@@ -62,13 +62,13 @@ Or folow these steps:
 
 ## EEPROM writes
 
-Offsets at or above 32768 are stored on the stove. This integration allows 3 of those commands per hour and 5 per day per stove. Cloud, Bluetooth and local MQTT share the count. At 5 per day a cell of about 32,000 writes lasts about 17.5 years. That is the middle of the usual 10,000 to 100,000 cycle range. Cloud and Bluetooth give the count back when the write fails. MQTT gives it back only when the command was not sent. A sent MQTT command stays counted, because the stove does not confirm that it stored the value. The off switch is Allow EEPROM writes on the stove row.
+Offsets at or above 32768 are stored on the stove. The default is 3 of those commands per hour and 5 per day per stove. The stove row can raise that to 15 per hour and 50 per day. The hourly value stays at or below the daily value. Cloud, Bluetooth and local MQTT share the count. At the default of 5 per day a cell of about 32,000 writes lasts about 17.5 years. That is the middle of the usual 10,000 to 100,000 cycle range. Cloud and Bluetooth give the count back when the write fails. MQTT gives it back only when the command was not sent. A sent MQTT command stays counted, because the stove does not confirm that it stored the value. The off switch and the two limits are on the stove row.
 
 ## Local Bluetooth mode
 
 This integration includes an experimental `Bluetooth` connection mode for Micronova stoves equipped with a local BLE module (for example the Micronova / Navel `T009_*` module seen by Home Assistant).
 
-You can enable this mode via the integration options after setup.
+You choose Bluetooth on the stove row after setup. Each stove chooses Cloud, Bluetooth or local MQTT on its own row.
 
 For more information see [BLUETOOTH](docs/BLUETOOTH.md).
 

@@ -7,6 +7,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .const import DOMAIN, SENSORS
+from .stoves import add_stove_entities
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
@@ -29,7 +30,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             ):
                 sensors.append(AguaIOTHeatingSensor(coordinator, device, sensor))
 
-    async_add_entities(sensors, True)
+    add_stove_entities(config_entry, async_add_entities, sensors)
 
 
 class AguaIOTHeatingSensor(CoordinatorEntity, SensorEntity):

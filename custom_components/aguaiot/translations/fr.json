@@ -29,18 +29,8 @@
     "step": {
       "user": {
         "title": "Options Micronova Agua IOT",
-        "description": "Choisissez Cloud, Bluetooth ou MQTT local. Réglez l'hôte MQTT, le port et l'EEPROM sur le poêle.",
-        "data": {
-          "connection_mode": "Connexion"
-        },
+        "description": "La langue, les délais et l'intervalle de mise à jour valent pour chaque poêle. Choisissez Cloud, Bluetooth ou MQTT local, ainsi que les correctifs Jolly Mec et Bronpi, sur la ligne du poêle.",
         "sections": {
-          "device_fixes": {
-            "name": "Correctifs spécifiques aux appareils",
-            "data": {
-              "air_temp_fix": "[Jolly Mec] Ignorer la température de l'air incorrecte lors de l'utilisation d'un thermostat externe.",
-              "reading_error_fix": "[Bronpi] Filtrer les lectures incorrectes (lorsque le poêle est sans alimentation)."
-            }
-          },
           "advanced_connection": {
             "name": "Paramètres de connexion avancés",
             "data": {
@@ -68,10 +58,14 @@
           "username": "Utilisateur",
           "password": "Mot de passe",
           "write_confirmation": "Exiger une confirmation applicative des écritures",
-          "allow_eeprom_writes": "Autoriser les écritures EEPROM"
+          "allow_eeprom_writes": "Autoriser les écritures EEPROM",
+          "max_eeprom_writes_per_hour": "Commandes par heure",
+          "max_eeprom_writes_per_day": "Commandes par jour"
         },
         "data_description": {
-          "allow_eeprom_writes": "Activé par défaut. 3 commandes par heure et 5 commandes par jour et par poêle, partagées entre cloud, Bluetooth et MQTT local. Cloud et Bluetooth recréditent le quota en cas d'échec. MQTT le recrédite seulement si la commande n'est pas partie. Désactivez pour bloquer ces écritures de cette intégration."
+          "allow_eeprom_writes": "Activé par défaut. La valeur par défaut est de 3 commandes par heure et 5 commandes par jour et par poêle. Sur cette ligne vous pouvez monter jusqu'à 15 par heure et 50 par jour. La valeur horaire reste au plus égale à la valeur du jour. Cloud, Bluetooth et MQTT local partagent le quota. Cloud et Bluetooth recréditent le quota en cas d'échec. MQTT le recrédite seulement si la commande n'est pas partie. Désactivez pour bloquer ces écritures de cette intégration.",
+          "max_eeprom_writes_per_hour": "Valeur par défaut 3. Maximum 15. Reste au plus égal à la valeur du jour.",
+          "max_eeprom_writes_per_day": "Valeur par défaut 5. Maximum 50."
         }
       }
     },
@@ -81,7 +75,8 @@
       "unauthorized": "Échec de la connexion, veuillez vérifier vos identifiants.",
       "unknown_error": "Erreur inconue, veuillez vérifier la configuration.",
       "mqtt_unavailable": "Configurez Home Assistant MQTT ou un serveur par poêle.",
-      "invalid_mac": "Saisissez une adresse MAC Wi-Fi unique de 12 caractères hexadécimaux."
+      "invalid_mac": "Saisissez une adresse MAC Wi-Fi unique de 12 caractères hexadécimaux.",
+      "invalid_limits": "Utilisez un nombre entier de 1 à 15 par heure et de 1 à 50 par jour. La valeur horaire reste au plus égale à la valeur du jour."
     },
     "abort": {
       "no_cached_devices": "Connectez-vous une fois au cloud pour enregistrer les données du poêle."
@@ -112,23 +107,40 @@
         },
         "reconfigure": {
           "title": "Connexion et EEPROM",
-          "description": "Laissez le serveur vide pour utiliser Home Assistant MQTT. Un mot de passe vide conserve le précédent. Les confirmations applicatives doivent être prises en charge par le serveur. Laissez cette option désactivée pour les courtiers ordinaires.",
+          "description": "Laissez le serveur vide pour utiliser Home Assistant MQTT. Un mot de passe vide conserve le précédent. Les confirmations applicatives doivent être prises en charge par le serveur. Laissez cette option désactivée pour les courtiers ordinaires. La connexion, le correctif Jolly Mec et le correctif Bronpi valent pour ce poêle seul.",
           "data": {
+            "connection_mode": "Connexion",
             "device_mac": "Adresse MAC Wi-Fi",
             "hostname": "Serveur MQTT",
             "port": "Port",
             "username": "Utilisateur",
             "password": "Mot de passe",
             "write_confirmation": "Exiger une confirmation applicative des écritures",
-            "allow_eeprom_writes": "Autoriser les écritures EEPROM"
+            "allow_eeprom_writes": "Autoriser les écritures EEPROM",
+            "max_eeprom_writes_per_hour": "Commandes par heure",
+            "max_eeprom_writes_per_day": "Commandes par jour"
           },
           "data_description": {
-            "allow_eeprom_writes": "Activé par défaut. 3 commandes par heure et 5 commandes par jour et par poêle, partagées entre cloud, Bluetooth et MQTT local. Cloud et Bluetooth recréditent le quota en cas d'échec. MQTT le recrédite seulement si la commande n'est pas partie. Désactivez pour bloquer ces écritures de cette intégration."
+            "device_mac": "Obligatoire pour MQTT local. Cloud et Bluetooth peuvent laisser le champ vide. Une adresse saisie reste unique.",
+            "allow_eeprom_writes": "Activé par défaut. La valeur par défaut est de 3 commandes par heure et 5 commandes par jour et par poêle. Sur cette ligne vous pouvez monter jusqu'à 15 par heure et 50 par jour. La valeur horaire reste au plus égale à la valeur du jour. Cloud, Bluetooth et MQTT local partagent le quota. Cloud et Bluetooth recréditent le quota en cas d'échec. MQTT le recrédite seulement si la commande n'est pas partie. Désactivez pour bloquer ces écritures de cette intégration.",
+            "max_eeprom_writes_per_hour": "Valeur par défaut 3. Maximum 15. Reste au plus égal à la valeur du jour.",
+            "max_eeprom_writes_per_day": "Valeur par défaut 5. Maximum 50."
+          },
+          "sections": {
+            "device_fixes": {
+              "name": "Correctifs spécifiques aux appareils",
+              "data": {
+                "air_temp_fix": "[Jolly Mec] Ignorer la température de l'air incorrecte lors de l'utilisation d'un thermostat externe.",
+                "reading_error_fix": "[Bronpi] Filtrer les lectures incorrectes (lorsque le poêle est sans alimentation)."
+              }
+            }
           }
         }
       },
       "error": {
-        "invalid_mac": "Saisissez une adresse MAC Wi-Fi unique de 12 caractères hexadécimaux."
+        "invalid_mac": "Saisissez une adresse MAC Wi-Fi unique de 12 caractères hexadécimaux.",
+        "invalid_limits": "Utilisez un nombre entier de 1 à 15 par heure et de 1 à 50 par jour. La valeur horaire reste au plus égale à la valeur du jour.",
+        "invalid_connection": "Choisissez Cloud, Bluetooth ou MQTT local pour ce poêle."
       },
       "abort": {
         "no_cached_devices": "Connectez-vous une fois au cloud pour enregistrer les données du poêle.",

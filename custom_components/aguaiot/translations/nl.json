@@ -29,17 +29,7 @@
     "step": {
       "user": {
         "title": "Micronova Agua IOT opties",
-        "data": {
-          "connection_mode": "Verbinding"
-        },
         "sections": {
-          "device_fixes": {
-            "name": "Apparaat specifieke fixes",
-            "data": {
-              "air_temp_fix": "[Jolly Mec] Negeer foutieve air temperature bij gebruik van een externe thermostaat.",
-              "reading_error_fix": "[Bronpi] Filter foutieve waardes (wanneer kachel geen stroom heeft)."
-            }
-          },
           "advanced_connection": {
             "name": "Geavanceerde verbindingsinstellingen",
             "data": {
@@ -50,7 +40,7 @@
             }
           }
         },
-        "description": "Kies Cloud, Bluetooth of lokale MQTT. Stel de MQTT-host, de poort en EEPROM op de kachel in."
+        "description": "Taal, time-outs en het update-interval gelden voor elke kachel. Cloud, Bluetooth of lokale MQTT en de correcties voor Jolly Mec en Bronpi stel je op de kachel in."
       },
       "mqtt_device": {
         "title": "Kachel kiezen",
@@ -68,10 +58,14 @@
           "username": "Gebruikersnaam",
           "password": "Wachtwoord",
           "write_confirmation": "Toepassingsbevestiging voor schrijfacties vereisen",
-          "allow_eeprom_writes": "EEPROM-schrijfacties toestaan"
+          "allow_eeprom_writes": "EEPROM-schrijfacties toestaan",
+          "max_eeprom_writes_per_hour": "Opdrachten per uur",
+          "max_eeprom_writes_per_day": "Opdrachten per dag"
         },
         "data_description": {
-          "allow_eeprom_writes": "Standaard aan. 3 opdrachten per uur en 5 opdrachten per dag per kachel, gedeeld door cloud, Bluetooth en lokale MQTT. Cloud en Bluetooth geven de telling terug als het schrijven mislukt. MQTT geeft die alleen terug als de opdracht niet is verzonden. Uitschakelen blokkeert deze schrijfacties van deze integratie."
+          "allow_eeprom_writes": "Standaard aan. De standaard is 3 opdrachten per uur en 5 opdrachten per dag per kachel. Op deze rij kun je dat verhogen tot 15 per uur en 50 per dag. De uurwaarde blijft hoogstens gelijk aan de dagwaarde. Cloud, Bluetooth en lokale MQTT delen de telling. Cloud en Bluetooth geven de telling terug als het schrijven mislukt. MQTT geeft die alleen terug als de opdracht niet is verzonden. Uitschakelen blokkeert deze schrijfacties van deze integratie.",
+          "max_eeprom_writes_per_hour": "Standaard 3. Hoogste waarde is 15. Blijft hoogstens gelijk aan de dagwaarde.",
+          "max_eeprom_writes_per_day": "Standaard 5. Hoogste waarde is 50."
         }
       }
     },
@@ -81,7 +75,8 @@
       "unauthorized": "Inloggen mislukt, valideer de gebruikersdata.",
       "unknown_error": "Onbekende fout, valideer de configuratie.",
       "mqtt_unavailable": "Configureer Home Assistant MQTT of een server per kachel.",
-      "invalid_mac": "Voer een uniek wifi-MAC-adres met 12 hexadecimale tekens in."
+      "invalid_mac": "Voer een uniek wifi-MAC-adres met 12 hexadecimale tekens in.",
+      "invalid_limits": "Gebruik een geheel getal van 1 tot 15 per uur en 1 tot 50 per dag. De uurwaarde blijft hoogstens gelijk aan de dagwaarde."
     },
     "abort": {
       "no_cached_devices": "Maak eenmaal verbinding met de cloud om de kachelgegevens op te slaan."
@@ -112,23 +107,40 @@
         },
         "reconfigure": {
           "title": "Verbinding en EEPROM",
-          "description": "Laat de host leeg voor Home Assistant MQTT. Een leeg wachtwoord behoudt het opgeslagen wachtwoord. De server moet toepassingsbevestigingen ondersteunen. Laat dit uitgeschakeld voor gewone brokers.",
+          "description": "Laat de host leeg voor Home Assistant MQTT. Een leeg wachtwoord behoudt het opgeslagen wachtwoord. De server moet toepassingsbevestigingen ondersteunen. Laat dit uitgeschakeld voor gewone brokers. Verbinding, de correctie voor Jolly Mec en de correctie voor Bronpi gelden alleen voor deze kachel.",
           "data": {
+            "connection_mode": "Verbinding",
             "device_mac": "Wifi-MAC-adres",
             "hostname": "MQTT-host",
             "port": "Poort",
             "username": "Gebruikersnaam",
             "password": "Wachtwoord",
             "write_confirmation": "Toepassingsbevestiging voor schrijfacties vereisen",
-            "allow_eeprom_writes": "EEPROM-schrijfacties toestaan"
+            "allow_eeprom_writes": "EEPROM-schrijfacties toestaan",
+            "max_eeprom_writes_per_hour": "Opdrachten per uur",
+            "max_eeprom_writes_per_day": "Opdrachten per dag"
           },
           "data_description": {
-            "allow_eeprom_writes": "Standaard aan. 3 opdrachten per uur en 5 opdrachten per dag per kachel, gedeeld door cloud, Bluetooth en lokale MQTT. Cloud en Bluetooth geven de telling terug als het schrijven mislukt. MQTT geeft die alleen terug als de opdracht niet is verzonden. Uitschakelen blokkeert deze schrijfacties van deze integratie."
+            "device_mac": "Verplicht voor lokale MQTT. Cloud en Bluetooth mogen het veld leeg laten. Een ingevuld adres blijft uniek.",
+            "allow_eeprom_writes": "Standaard aan. De standaard is 3 opdrachten per uur en 5 opdrachten per dag per kachel. Op deze rij kun je dat verhogen tot 15 per uur en 50 per dag. De uurwaarde blijft hoogstens gelijk aan de dagwaarde. Cloud, Bluetooth en lokale MQTT delen de telling. Cloud en Bluetooth geven de telling terug als het schrijven mislukt. MQTT geeft die alleen terug als de opdracht niet is verzonden. Uitschakelen blokkeert deze schrijfacties van deze integratie.",
+            "max_eeprom_writes_per_hour": "Standaard 3. Hoogste waarde is 15. Blijft hoogstens gelijk aan de dagwaarde.",
+            "max_eeprom_writes_per_day": "Standaard 5. Hoogste waarde is 50."
+          },
+          "sections": {
+            "device_fixes": {
+              "name": "Apparaat specifieke fixes",
+              "data": {
+                "air_temp_fix": "[Jolly Mec] Negeer foutieve air temperature bij gebruik van een externe thermostaat.",
+                "reading_error_fix": "[Bronpi] Filter foutieve waardes (wanneer kachel geen stroom heeft)."
+              }
+            }
           }
         }
       },
       "error": {
-        "invalid_mac": "Voer een uniek wifi-MAC-adres met 12 hexadecimale tekens in."
+        "invalid_mac": "Voer een uniek wifi-MAC-adres met 12 hexadecimale tekens in.",
+        "invalid_limits": "Gebruik een geheel getal van 1 tot 15 per uur en 1 tot 50 per dag. De uurwaarde blijft hoogstens gelijk aan de dagwaarde.",
+        "invalid_connection": "Kies Cloud, Bluetooth of lokale MQTT voor deze kachel."
       },
       "abort": {
         "no_cached_devices": "Maak eenmaal verbinding met de cloud om de kachelgegevens op te slaan.",

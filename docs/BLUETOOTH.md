@@ -30,11 +30,11 @@ After that bootstrap data is cached in Home Assistant, reads and writes can run 
 
 1. Set up the integration normally with your vendor cloud account.
 2. Make sure Home Assistant can reach the stove over Bluetooth, either directly or through a Bluetooth proxy close to the stove.
-3. Open the integration options.
-4. Change `Connection mode` to `Bluetooth local`.
-5. Submit the form and let Home Assistant auto-detect and validate the nearby Micronova BLE module.
+3. Open the stove row on the integration page.
+4. Choose Bluetooth for this stove. Another stove in the same account can stay on Cloud or local MQTT.
+5. Save the row. Home Assistant connects to that stove over Bluetooth on the next setup.
 
-The options flow performs a real BLE validation before it accepts the local mode, so a successful save means the module was detected and the local transport was able to talk to it.
+A saved row stores the choice for that stove. The next setup talks to the module. A stove that cannot be reached stays offline and leaves the other stoves running.
 
 ### Current scope and limitations
 

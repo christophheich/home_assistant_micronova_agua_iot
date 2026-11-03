@@ -8,6 +8,7 @@ from homeassistant.helpers.update_coordinator import (
 
 from .aguaiot import AguaIOTError
 from .const import DOMAIN, NUMBERS
+from .stoves import add_stove_entities
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             ):
                 numbers.append(AguaIOTHeatingNumber(coordinator, device, number))
 
-    async_add_entities(numbers, True)
+    add_stove_entities(config_entry, async_add_entities, numbers)
 
 
 class AguaIOTHeatingNumber(CoordinatorEntity, NumberEntity):

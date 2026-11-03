@@ -18,6 +18,13 @@ except ImportError:  # pragma: no cover
 class StubLocalBleAguaIOT:
     """Placeholder for the Bluetooth transport, which is not tested here."""
 
+    def __init__(self, *args, **kwargs):
+        self.device_options = kwargs.get("device_options") or {}
+        self._cached_devices = kwargs.get("cached_devices") or []
+        self._only_device_ids = kwargs.get("only_device_ids")
+        self.air_temp_fix = kwargs.get("air_temp_fix", False)
+        self.devices = []
+
 
 coordinator_module = load_component_module(
     "coordinator",
@@ -150,6 +157,145 @@ class TestConnectionModes:
         coordinator = AguaIOTDataUpdateCoordinator(hass=MagicMock(), config_entry=entry)
         assert coordinator.agua._mqtt_devices["one"]["hostname"] == "127.0.0.1"
         assert coordinator.agua._mqtt_devices["one"]["allow_eeprom_writes"] is False
+
+    def test_a_stove_connection_wins_over_the_account_option(self):
+        entry = make_config_entry(const.CONNECTION_MODE_LOCAL_MQTT)
+        current = ConfigSubentry(
+            data={"connection_mode": const.CONNECTION_MODE_CLOUD},
+            subentry_type="stove",
+            title="Cloud",
+            unique_id="one",
+        )
+        entry.subentries = {current.subentry_id: current}
+        coordinator = AguaIOTDataUpdateCoordinator(hass=MagicMock(), config_entry=entry)
+        assert not isinstance(coordinator.agua, LocalMqttAguaIOT)
+        assert coordinator.connection_mode == const.CONNECTION_MODE_CLOUD
+
+    def test_mixed_stoves_get_one_client_each(self):
+        entry = make_config_entry(const.CONNECTION_MODE_CLOUD)
+        mqtt = ConfigSubentry(
+            data={
+                "connection_mode": const.CONNECTION_MODE_LOCAL_MQTT,
+                "hostname": "127.0.0.1",
+            },
+            subentry_type="stove",
+            title="Mqtt",
+            unique_id="mqtt",
+        )
+        ble = ConfigSubentry(
+            data={
+                "connection_mode": const.CONNECTION_MODE_BLUETOOTH,
+                "air_temp_fix": True,
+            },
+            subentry_type="stove",
+            title="Ble",
+            unique_id="ble",
+        )
+        cloud = ConfigSubentry(
+            data={
+                "connection_mode": const.CONNECTION_MODE_CLOUD,
+                "reading_error_fix": True,
+            },
+            subentry_type="stove",
+            title="Cloud",
+            unique_id="cloud",
+        )
+        entry.subentries = {
+            mqtt.subentry_id: mqtt,
+            ble.subentry_id: ble,
+            cloud.subentry_id: cloud,
+        }
+        entry.data[const.CONF_BLE_BOOTSTRAP_DEVICES] = [
+            {"id_device": "mqtt", "name": "Mqtt"},
+            {"id_device": "ble", "name": "Ble"},
+            {"id_device": "cloud", "name": "Cloud"},
+        ]
+        coordinator = AguaIOTDataUpdateCoordinator(hass=MagicMock(), config_entry=entry)
+        router = coordinator.agua
+        assert isinstance(router, coordinator_module.StoveRouter)
+        assert coordinator.connection_mode is None
+        clients = dict(router._clients)
+        assert set(clients) == {
+            const.CONNECTION_MODE_LOCAL_MQTT,
+            const.CONNECTION_MODE_BLUETOOTH,
+            const.CONNECTION_MODE_CLOUD,
+        }
+        assert set(clients[const.CONNECTION_MODE_LOCAL_MQTT]._mqtt_devices) == {"mqtt"}
+        assert clients[const.CONNECTION_MODE_LOCAL_MQTT]._only_device_ids == {"mqtt"}
+        assert clients[const.CONNECTION_MODE_LOCAL_MQTT].air_temp_fix is False
+        assert [
+            item["id_device"]
+            for item in clients[const.CONNECTION_MODE_LOCAL_MQTT]._cached_devices
+        ] == ["mqtt"]
+        ble_client = clients[const.CONNECTION_MODE_BLUETOOTH]
+        assert set(ble_client.device_options) == {"ble"}
+        assert ble_client.device_options["ble"]["air_temp_fix"] is True
+        assert ble_client._only_device_ids == {"ble"}
+        assert [item["id_device"] for item in ble_client._cached_devices] == ["ble"]
+        assert set(clients[const.CONNECTION_MODE_CLOUD].device_options) == {"cloud"}
+
+
+class TestRouterFailures:
+    @pytest.mark.asyncio
+    async def test_one_failed_connection_leaves_the_other_stove(self):
+        class Client:
+            def __init__(self, fail, device_id):
+                self.fail = fail
+                self.devices = []
+                self.device_id = device_id
+                self.closed = False
+
+            async def connect(self):
+                if self.fail:
+                    raise RuntimeError("down")
+                self.devices = [MagicMock(id_device=self.device_id)]
+
+            async def close(self):
+                self.closed = True
+
+            async def update(self):
+                if self.fail:
+                    raise RuntimeError("down")
+
+        bad = Client(True, "ble")
+        good = Client(False, "cloud")
+        router = coordinator_module.StoveRouter(
+            [
+                (const.CONNECTION_MODE_BLUETOOTH, bad),
+                (const.CONNECTION_MODE_CLOUD, good),
+            ],
+            {"ble"},
+        )
+        await router.connect()
+        assert bad.closed is True
+        assert [device.id_device for device in router.devices] == ["cloud"]
+        bad.devices = [MagicMock(id_device="ble")]
+        await router.update()
+        bad.fail = True
+        good.fail = True
+        good.devices = [MagicMock(id_device="cloud")]
+        with pytest.raises(RuntimeError):
+            await router.update()
+
+    @pytest.mark.asyncio
+    async def test_router_cache_keeps_a_stove_the_export_missed(self):
+        coordinator = make_coordinator()
+        router = coordinator_module.StoveRouter([], set())
+        router.export_bootstrap_cache = lambda: [
+            {"id_device": "mqtt", "register_map": {"a": 1}}
+        ]
+        coordinator.agua = router
+        coordinator.config_entry.data[const.CONF_BLE_BOOTSTRAP_DEVICES] = [
+            {"id_device": "ble", "register_map": {"b": 1}},
+            {"id_device": "mqtt", "register_map": {"old": 1}},
+        ]
+        await coordinator._async_persist_ble_bootstrap_if_needed()
+        saved = coordinator.hass.config_entries.async_update_entry.call_args.kwargs[
+            "data"
+        ][const.CONF_BLE_BOOTSTRAP_DEVICES]
+        by_id = {item["id_device"]: item for item in saved}
+        assert by_id["ble"]["register_map"] == {"b": 1}
+        assert by_id["mqtt"]["register_map"] == {"a": 1}
 
 
 class TestCloudBootstrapForLocalConnections:

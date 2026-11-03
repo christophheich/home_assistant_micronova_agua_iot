@@ -83,6 +83,25 @@ def make_test_instance(
 class TestLocalMqttBasics:
     """Test instance creation, cache helpers, and identifier sanitization."""
 
+    def test_only_device_ids_keeps_the_selected_stove(self):
+        cached = [
+            {"id_device": "one", "name": "One"},
+            {"id_device": "two", "name": "Two"},
+        ]
+        client = LocalMqttAguaIOT(
+            hass=MagicMock(),
+            api_url="https://example.com",
+            customer_code="123456",
+            email="test@example.com",
+            password="secret_password",
+            unique_id="uuid-test-1234",
+            cached_devices=cached,
+            only_device_ids={"two"},
+        )
+        assert [item["id_device"] for item in client._matching_cached(cached)] == [
+            "two"
+        ]
+
     def test_clean_identifier(self):
         client = make_test_instance()
         assert client._clean_identifier("AA:BB:CC:11:22:33") == "AABBCC112233"

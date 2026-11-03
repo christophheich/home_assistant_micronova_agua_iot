@@ -29,17 +29,7 @@
     "step": {
       "user": {
         "title": "Opções Micronova Agua IOT",
-        "data": {
-          "connection_mode": "Ligação"
-        },
         "sections": {
-          "device_fixes": {
-            "name": "Correções específicas do dispositivo",
-            "data": {
-              "air_temp_fix": "[Jolly Mec] Ignorar temperatura do ar incorreta ao usar termostato externo.",
-              "reading_error_fix": "[Bronpi] Filtrar leituras incorretas (quando o forno está sem energia)."
-            }
-          },
           "advanced_connection": {
             "name": "Definições avançadas de ligação",
             "data": {
@@ -50,7 +40,7 @@
             }
           }
         },
-        "description": "Escolha Cloud, Bluetooth ou MQTT local. Defina o servidor MQTT, a porta e a EEPROM na salamandra."
+        "description": "O idioma, os tempos limite e o intervalo de atualização valem para cada salamandra. Defina Cloud, Bluetooth ou MQTT local, e as correções Jolly Mec e Bronpi, na linha da salamandra."
       },
       "mqtt_device": {
         "title": "Selecionar salamandra",
@@ -68,10 +58,14 @@
           "username": "Utilizador",
           "password": "Palavra-passe",
           "write_confirmation": "Exigir confirmação da aplicação para escritas",
-          "allow_eeprom_writes": "Permitir escritas na EEPROM"
+          "allow_eeprom_writes": "Permitir escritas na EEPROM",
+          "max_eeprom_writes_per_hour": "Comandos por hora",
+          "max_eeprom_writes_per_day": "Comandos por dia"
         },
         "data_description": {
-          "allow_eeprom_writes": "Ativado por predefinição. 3 comandos por hora e 5 comandos por dia por salamandra, partilhados entre cloud, Bluetooth e MQTT local. Cloud e Bluetooth devolvem a contagem se a escrita falhar. O MQTT devolve-a só quando o comando não foi enviado. Desative para bloquear estas escritas desta integração."
+          "allow_eeprom_writes": "Ativado por predefinição. A predefinição é 3 comandos por hora e 5 comandos por dia por salamandra. Nesta linha pode subir até 15 por hora e 50 por dia. O valor por hora fica no máximo igual ao valor do dia. Cloud, Bluetooth e MQTT local partilham a contagem. Cloud e Bluetooth devolvem a contagem se a escrita falhar. O MQTT devolve-a só quando o comando não foi enviado. Desative para bloquear estas escritas desta integração.",
+          "max_eeprom_writes_per_hour": "Predefinição 3. Valor máximo 15. Fica no máximo igual ao valor do dia.",
+          "max_eeprom_writes_per_day": "Predefinição 5. Valor máximo 50."
         }
       }
     },
@@ -81,7 +75,8 @@
       "unauthorized": "Falha na autenticação. Verifique as credenciais.",
       "unknown_error": "Erro desconhecido. Verifique a configuração.",
       "mqtt_unavailable": "Configure o Home Assistant MQTT ou um servidor por salamandra.",
-      "invalid_mac": "Introduza um endereço MAC Wi-Fi único com 12 caracteres hexadecimais."
+      "invalid_mac": "Introduza um endereço MAC Wi-Fi único com 12 caracteres hexadecimais.",
+      "invalid_limits": "Use um número inteiro de 1 a 15 por hora e de 1 a 50 por dia. O valor por hora fica no máximo igual ao valor do dia."
     },
     "abort": {
       "no_cached_devices": "Ligue-se uma vez à cloud para guardar os dados da salamandra."
@@ -112,23 +107,40 @@
         },
         "reconfigure": {
           "title": "Ligação e EEPROM",
-          "description": "Deixe o servidor vazio para utilizar o Home Assistant MQTT. Uma palavra-passe vazia mantém a anterior. As confirmações da aplicação devem ser suportadas pelo servidor. Mantenha desativado para brokers comuns.",
+          "description": "Deixe o servidor vazio para utilizar o Home Assistant MQTT. Uma palavra-passe vazia mantém a anterior. As confirmações da aplicação devem ser suportadas pelo servidor. Mantenha desativado para brokers comuns. A ligação, a correção Jolly Mec e a correção Bronpi valem só para esta salamandra.",
           "data": {
+            "connection_mode": "Ligação",
             "device_mac": "Endereço MAC Wi-Fi",
             "hostname": "Servidor MQTT",
             "port": "Porta",
             "username": "Utilizador",
             "password": "Palavra-passe",
             "write_confirmation": "Exigir confirmação da aplicação para escritas",
-            "allow_eeprom_writes": "Permitir escritas na EEPROM"
+            "allow_eeprom_writes": "Permitir escritas na EEPROM",
+            "max_eeprom_writes_per_hour": "Comandos por hora",
+            "max_eeprom_writes_per_day": "Comandos por dia"
           },
           "data_description": {
-            "allow_eeprom_writes": "Ativado por predefinição. 3 comandos por hora e 5 comandos por dia por salamandra, partilhados entre cloud, Bluetooth e MQTT local. Cloud e Bluetooth devolvem a contagem se a escrita falhar. O MQTT devolve-a só quando o comando não foi enviado. Desative para bloquear estas escritas desta integração."
+            "device_mac": "Obrigatório para MQTT local. Cloud e Bluetooth podem deixar o campo vazio. Um endereço introduzido fica único.",
+            "allow_eeprom_writes": "Ativado por predefinição. A predefinição é 3 comandos por hora e 5 comandos por dia por salamandra. Nesta linha pode subir até 15 por hora e 50 por dia. O valor por hora fica no máximo igual ao valor do dia. Cloud, Bluetooth e MQTT local partilham a contagem. Cloud e Bluetooth devolvem a contagem se a escrita falhar. O MQTT devolve-a só quando o comando não foi enviado. Desative para bloquear estas escritas desta integração.",
+            "max_eeprom_writes_per_hour": "Predefinição 3. Valor máximo 15. Fica no máximo igual ao valor do dia.",
+            "max_eeprom_writes_per_day": "Predefinição 5. Valor máximo 50."
+          },
+          "sections": {
+            "device_fixes": {
+              "name": "Correções específicas do dispositivo",
+              "data": {
+                "air_temp_fix": "[Jolly Mec] Ignorar temperatura do ar incorreta ao usar termostato externo.",
+                "reading_error_fix": "[Bronpi] Filtrar leituras incorretas (quando o forno está sem energia)."
+              }
+            }
           }
         }
       },
       "error": {
-        "invalid_mac": "Introduza um endereço MAC Wi-Fi único com 12 caracteres hexadecimais."
+        "invalid_mac": "Introduza um endereço MAC Wi-Fi único com 12 caracteres hexadecimais.",
+        "invalid_limits": "Use um número inteiro de 1 a 15 por hora e de 1 a 50 por dia. O valor por hora fica no máximo igual ao valor do dia.",
+        "invalid_connection": "Escolha Cloud, Bluetooth ou MQTT local para esta salamandra."
       },
       "abort": {
         "no_cached_devices": "Ligue-se uma vez à cloud para guardar os dados da salamandra.",

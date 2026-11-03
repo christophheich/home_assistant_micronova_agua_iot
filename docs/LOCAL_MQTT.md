@@ -4,8 +4,8 @@ Use an MQTT 3.1.1 broker or protocol-compatible endpoint reachable by both Home 
 
 1. Connect Agua IOT through the cloud once to cache device metadata and register maps.
 2. Point the stove vendor hostname to your broker using your router or local DNS service.
-3. Open the stove row on the integration page and enter the Wi-Fi MAC, host, port and EEPROM switch there. Leave the host empty to use the existing Home Assistant MQTT integration, or enter a host, port and credentials for a separate connection.
-4. Select **Local MQTT** as connection mode. The mode is accepted after fresh readings arrive from every stove in the account.
+3. Open the stove row on the integration page and enter the Wi-Fi MAC, host, port, EEPROM switch and the hourly and daily write limits there. Leave the host empty to use the existing Home Assistant MQTT integration, or enter a host, port and credentials for a separate connection.
+4. On that stove row, select Local MQTT. The row accepts the mode after a fresh reading arrives from that stove. Other stoves can stay on Cloud or Bluetooth.
 
 Each stove has separate topics, register cache and application session. Use MAC client IDs and configure the broker ACLs for your firmware. Stove firmware credentials may be shared and MQTT traffic is unencrypted; use a trusted LAN.
 
@@ -15,7 +15,7 @@ Application write confirmations are an optional endpoint capability. Leave disab
 
 Normal polling reads RAM and cached setpoints. Write only registers that belong to this stove model.
 
-Offsets at or above 32768 are EEPROM. Those writes stay allowed. Each stove gets 3 commands per hour and 5 commands per day. At 5 per day a cell of about 32,000 writes lasts about 17.5 years. That is the middle of the usual 10,000 to 100,000 cycle range. Cloud, Bluetooth and local MQTT share that count. One command counts once, even when it changes several registers. The count is saved before the command is sent and kept across restarts. Cloud and Bluetooth give the count back when the write fails. MQTT gives it back only when the command was not sent. A sent command stays counted, including when delivery is uncertain, because the stove does not confirm that it stored the value. If the saved count cannot be read or updated, the write is blocked. RAM reads and RAM writes are free. Turn off Allow EEPROM writes on the stove row to block EEPROM writes from this integration. Other programs are not covered. Deleting the saved count is not a supported reset.
+Offsets at or above 32768 are EEPROM. Those writes stay allowed. The default is 3 commands per hour and 5 commands per day. The stove row can raise that to 15 per hour and 50 per day. The hourly value stays at or below the daily value. At the default of 5 per day a cell of about 32,000 writes lasts about 17.5 years. That is the middle of the usual 10,000 to 100,000 cycle range. Cloud, Bluetooth and local MQTT share that count. One command counts once, even when it changes several registers. The count is saved before the command is sent and kept across restarts. Cloud and Bluetooth give the count back when the write fails. MQTT gives it back only when the command was not sent. A sent command stays counted, including when delivery is uncertain, because the stove does not confirm that it stored the value. If the saved count cannot be read or updated, the write is blocked. RAM reads and RAM writes are free. Turn off Allow EEPROM writes on the stove row to block EEPROM writes from this integration. Other programs are not covered. Deleting the saved count is not a supported reset.
 
 The options interface supports English, German, French, Dutch and Portuguese. Generic MQTT connection settings contain no dependency on another custom integration.
 
