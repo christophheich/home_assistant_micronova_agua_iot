@@ -32,10 +32,7 @@
         "data": {
           "language": "Sprache für Beschreibungen",
           "connection_mode": "Verbindungsmodus:",
-          "local_mqtt_port": "Lokaler MQTT-Server-Port (Standard: 1883).",
-          "allow_eeprom_writes": "EEPROM-Schreibzugriffe erlauben (nötig für Zieltemperaturen; Vorsicht: häufige Automationen verschleißen den Flash-Speicher).",
-          "max_eeprom_writes_per_hour": "Maximale EEPROM-Schreibvorgänge pro Stunde (Standard: 15).",
-          "max_eeprom_writes_per_day": "Maximale EEPROM-Schreibvorgänge pro 24 Stunden (Standard: 50)."
+          "configure_mqtt": "MQTT pro Ofen konfigurieren"
         },
         "sections": {
           "device_fixes": {
@@ -46,15 +43,48 @@
             }
           }
         }
+      },
+      "mqtt_device": {
+        "title": "Ofen auswählen",
+        "data": {
+          "device": "Ofen"
+        }
+      },
+      "mqtt_settings": {
+        "title": "MQTT-Verbindung",
+        "description": "Host leer lassen, um Home Assistant MQTT zu nutzen. Ein leeres Passwort behält das gespeicherte Passwort bei. Schreibbestätigungen müssen vom Endpunkt unterstützt werden; bei normalen Brokern ausgeschaltet lassen.",
+        "data": {
+          "device_mac": "WLAN-MAC-Adresse",
+          "hostname": "MQTT-Host",
+          "port": "Port",
+          "username": "Benutzername",
+          "password": "Passwort",
+          "write_confirmation": "Anwendungsbestätigung für Schreibbefehle verlangen",
+          "allow_eeprom_writes": "EEPROM-Schreibzugriffe erlauben"
+        },
+        "data_description": {
+          "allow_eeprom_writes": "Standardmäßig an. 3 Befehle pro Stunde und 5 Befehle pro Tag je Ofen, gemeinsam für Cloud, Bluetooth und lokales MQTT. Cloud und Bluetooth geben den Zähler bei einem Fehler zurück. MQTT gibt ihn nur zurück, wenn der Befehl nicht gesendet wurde. Aus sperrt diese Schreibzugriffe dieser Integration."
+        }
       }
+    },
+    "error": {
+      "stove_not_responding": "Keine aktuellen Messwerte empfangen. Prüfe Ofenverbindung, Hostnamen-Umleitung und MQTT-Einstellungen.",
+      "connection_error": "Die Verbindung mit Agua IOT API ist nicht möglich.",
+      "unauthorized": "Anmeldung fehlgeschlagen, bitte überprüfen Sie die Anmeldedaten.",
+      "unknown_error": "Unbekannter Fehler, bitte die Einstellung überprüfen.",
+      "mqtt_unavailable": "Richte Home Assistant MQTT ein oder hinterlege einen Endpunkt pro Ofen.",
+      "invalid_mac": "Trage eine eindeutige WLAN-MAC-Adresse mit 12 Hexadezimalstellen ein."
+    },
+    "abort": {
+      "no_cached_devices": "Verbinde dich einmal über die Cloud, um die Ofendaten zu speichern."
     }
   },
   "selector": {
     "connection_mode": {
       "options": {
-      "connection_cloud": "Cloud (Micronova API)",
-      "connection_bluetooth": "Bluetooth (auto-detect)",
-      "connection_local_mqtt": "Lokales MQTT (Navel 2.0 Wi-Fi)"
+        "connection_cloud": "Cloud (Micronova API)",
+        "connection_bluetooth": "Bluetooth (auto-detect)",
+        "connection_local_mqtt": "Lokales MQTT"
       }
     }
   }

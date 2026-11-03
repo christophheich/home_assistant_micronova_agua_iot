@@ -31,7 +31,8 @@
         "title": "Opções Micronova Agua IOT",
         "data": {
           "language": "Idioma para descrições",
-          "connection_mode": "Tryb połączenia:"
+          "connection_mode": "Tryb połączenia:",
+          "configure_mqtt": "Configurar MQTT por salamandra"
         },
         "sections": {
           "device_fixes": {
@@ -42,14 +43,48 @@
             }
           }
         }
+      },
+      "mqtt_device": {
+        "title": "Selecionar salamandra",
+        "data": {
+          "device": "Salamandra"
+        }
+      },
+      "mqtt_settings": {
+        "title": "Ligação MQTT",
+        "description": "Deixe o servidor vazio para utilizar o Home Assistant MQTT. Uma palavra-passe vazia mantém a anterior. As confirmações da aplicação devem ser suportadas pelo servidor; mantenha desativado para brokers comuns.",
+        "data": {
+          "device_mac": "Endereço MAC Wi-Fi",
+          "hostname": "Servidor MQTT",
+          "port": "Porta",
+          "username": "Utilizador",
+          "password": "Palavra-passe",
+          "write_confirmation": "Exigir confirmação da aplicação para escritas",
+          "allow_eeprom_writes": "Permitir escritas na EEPROM"
+        },
+        "data_description": {
+          "allow_eeprom_writes": "Ativado por predefinição. 3 comandos por hora e 5 comandos por dia por salamandra, partilhados entre cloud, Bluetooth e MQTT local. Cloud e Bluetooth devolvem a contagem se a escrita falhar. O MQTT devolve-a só quando o comando não foi enviado. Desative para bloquear estas escritas desta integração."
+        }
       }
+    },
+    "error": {
+      "stove_not_responding": "Nenhuma leitura atual recebida. Verifique a ligação, o redirecionamento DNS e o MQTT.",
+      "connection_error": "Não foi possível estabelecer ligação.",
+      "unauthorized": "Falha na autenticação. Verifique as credenciais.",
+      "unknown_error": "Erro desconhecido. Verifique a configuração.",
+      "mqtt_unavailable": "Configure o Home Assistant MQTT ou um servidor por salamandra.",
+      "invalid_mac": "Introduza um endereço MAC Wi-Fi único com 12 caracteres hexadecimais."
+    },
+    "abort": {
+      "no_cached_devices": "Ligue-se uma vez à cloud para guardar os dados da salamandra."
     }
   },
   "selector": {
     "connection_mode": {
       "options": {
-      "connection_cloud": "Cloud (Micronova API)",
-      "connection_bluetooth": "Bluetooth (auto-detect)"
+        "connection_cloud": "Cloud (Micronova API)",
+        "connection_bluetooth": "Bluetooth (auto-detect)",
+        "connection_local_mqtt": "MQTT local"
       }
     }
   }

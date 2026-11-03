@@ -40,7 +40,6 @@ Supports the following vendors (mobile apps):
 * Thermoflux
 * Total Control 3.0 (Extraflame)
 * TS Smart
-* TurboFonte
 * Wi-Phire
 
 Vendor apps **NOT** compatible (using a different platform or abstraction layer):
@@ -60,9 +59,13 @@ Or folow these steps:
 2. Install the plugin via HACS (Micronova Agua IOT)
 3. Add the integration through the home assistant configuration flow
 
+## EEPROM writes
+
+Offsets at or above 32768 are stored on the stove. This integration allows 3 of those commands per hour and 5 per day per stove. Cloud, Bluetooth and local MQTT share the count. At 5 per day a cell of about 32,000 writes lasts about 17.5 years. That is the middle of the usual 10,000 to 100,000 cycle range. Cloud and Bluetooth give the count back when the write fails. MQTT gives it back only when the command was not sent. A sent MQTT command stays counted, because the stove does not confirm that it stored the value. The off switch is "Allow EEPROM writes" in the per-stove MQTT settings.
+
 ## Local Bluetooth mode
 
-This integration includes an experimental `Bluetooth` connection mode for Micronova stoves equipped with a local BLE module (for example the Micronova / Navel `T009_*` module seen by Home Assistant).
+This integration now includes an experimental `Bluetooth` connection mode for Micronova stoves equipped with a local BLE module (for example the Micronova / Navel `T009_*` module seen by Home Assistant).
 
 You can enable this mode via the integration options after setup.
 
@@ -72,9 +75,7 @@ For more information see [BLUETOOTH](docs/BLUETOOTH.md).
 
 This integration supports local control for Micronova stoves equipped with a Navel 2.0 Wi-Fi module.
 
-Home Assistant runs an embedded local MQTT broker on port 1883. By redirecting the vendor server hostname to Home Assistant via DNS rewrite, the stove connects directly to your local Home Assistant instance with no cloud roundtrip.
-
-For setup instructions, DNS details, and EEPROM safety notes, see [LOCAL_MQTT](docs/LOCAL_MQTT.md).
+Local MQTT uses an existing broker through Home Assistant MQTT or a per-stove endpoint. Agua IOT does not run a broker. Setup and DNS are in [local MQTT setup](docs/LOCAL_MQTT.md).
 
 ## Credits
 

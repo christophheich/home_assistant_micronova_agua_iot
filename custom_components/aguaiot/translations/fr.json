@@ -35,7 +35,8 @@
           "buffer_read_timeout": "Délai d'attente des lectures du poêle (secondes).",
           "language": "Langue pour les descriptions",
           "update_interval": "Temps entre les mises à jour (secondes).",
-          "connection_mode": "Mode de connexion:"
+          "connection_mode": "Mode de connexion:",
+          "configure_mqtt": "Configurer MQTT par poêle"
         },
         "sections": {
           "device_fixes": {
@@ -46,14 +47,48 @@
             }
           }
         }
+      },
+      "mqtt_device": {
+        "title": "Choisir le poêle",
+        "data": {
+          "device": "Poêle"
+        }
+      },
+      "mqtt_settings": {
+        "title": "Connexion MQTT",
+        "description": "Laissez le serveur vide pour utiliser Home Assistant MQTT. Un mot de passe vide conserve le précédent. Les confirmations applicatives doivent être prises en charge par le serveur ; laissez cette option désactivée pour les courtiers ordinaires.",
+        "data": {
+          "device_mac": "Adresse MAC Wi-Fi",
+          "hostname": "Serveur MQTT",
+          "port": "Port",
+          "username": "Utilisateur",
+          "password": "Mot de passe",
+          "write_confirmation": "Exiger une confirmation applicative des écritures",
+          "allow_eeprom_writes": "Autoriser les écritures EEPROM"
+        },
+        "data_description": {
+          "allow_eeprom_writes": "Activé par défaut. 3 commandes par heure et 5 commandes par jour et par poêle, partagées entre cloud, Bluetooth et MQTT local. Cloud et Bluetooth recréditent le quota en cas d'échec. MQTT le recrédite seulement si la commande n'est pas partie. Désactivez pour bloquer ces écritures de cette intégration."
+        }
       }
+    },
+    "error": {
+      "stove_not_responding": "Aucune mesure récente reçue. Vérifiez la connexion du poêle, la redirection DNS et MQTT.",
+      "connection_error": "La connection à l'API Agua IOT n'est pas possible.",
+      "unauthorized": "Échec de la connexion, veuillez vérifier vos identifiants.",
+      "unknown_error": "Erreur inconue, veuillez vérifier la configuration.",
+      "mqtt_unavailable": "Configurez Home Assistant MQTT ou un serveur par poêle.",
+      "invalid_mac": "Saisissez une adresse MAC Wi-Fi unique de 12 caractères hexadécimaux."
+    },
+    "abort": {
+      "no_cached_devices": "Connectez-vous une fois au cloud pour enregistrer les données du poêle."
     }
   },
   "selector": {
     "connection_mode": {
       "options": {
         "connection_cloud": "Cloud (Micronova API)",
-        "connection_bluetooth": "Bluetooth (auto-detect)"
+        "connection_bluetooth": "Bluetooth (auto-detect)",
+        "connection_local_mqtt": "MQTT local"
       }
     }
   }

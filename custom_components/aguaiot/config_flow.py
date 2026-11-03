@@ -13,6 +13,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import section
+from homeassistant.helpers import selector
 from homeassistant.helpers.httpx_client import get_async_client
 
 from .aguaiot import (
@@ -23,7 +24,6 @@ from .aguaiot import (
 )
 from .const import (
     CONF_AIR_TEMP_FIX,
-    CONF_ALLOW_EEPROM_WRITES,
     CONF_API_URL,
     CONF_BLE_BOOTSTRAP_DEVICES,
     CONF_BLE_CHAR_UUID,
@@ -37,25 +37,18 @@ from .const import (
     CONF_ENDPOINT,
     CONF_HTTP_TIMEOUT,
     CONF_LANGUAGE,
-    CONF_LOCAL_MQTT_PORT,
     CONF_LOGIN_API_URL,
-    CONF_MAX_EEPROM_WRITES_PER_DAY,
-    CONF_MAX_EEPROM_WRITES_PER_HOUR,
     CONF_READING_ERROR_FIX,
     CONF_UPDATE_INTERVAL,
     CONF_UUID,
     CONNECTION_MODE_BLUETOOTH,
     CONNECTION_MODE_CLOUD,
     CONNECTION_MODE_LOCAL_MQTT,
-    DEFAULT_ALLOW_EEPROM_WRITES,
-    DEFAULT_LOCAL_MQTT_PORT,
-    DEFAULT_MAX_EEPROM_WRITES_PER_DAY,
-    DEFAULT_MAX_EEPROM_WRITES_PER_HOUR,
     DOMAIN,
     ENDPOINTS,
 )
 from .local_ble import DEFAULT_CHAR_UUID, DEFAULT_SERVICE_UUID, LocalBleAguaIOT
-from .local_mqtt import LocalMqttAguaIOT
+from .local_mqtt import LocalMqttAguaIOT, LocalMqttSetupError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -209,31 +202,8 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
         if connection_mode == CONNECTION_MODE_LOCAL_MQTT:
             return LocalMqttAguaIOT(
                 hass=self.hass,
-                port=user_input.get(
-                    CONF_LOCAL_MQTT_PORT,
-                    self.config_entry.options.get(
-                        CONF_LOCAL_MQTT_PORT, DEFAULT_LOCAL_MQTT_PORT
-                    ),
-                ),
-                allow_eeprom_writes=user_input.get(
-                    CONF_ALLOW_EEPROM_WRITES,
-                    self.config_entry.options.get(
-                        CONF_ALLOW_EEPROM_WRITES, DEFAULT_ALLOW_EEPROM_WRITES
-                    ),
-                ),
-                max_eeprom_writes_per_hour=user_input.get(
-                    CONF_MAX_EEPROM_WRITES_PER_HOUR,
-                    self.config_entry.options.get(
-                        CONF_MAX_EEPROM_WRITES_PER_HOUR,
-                        DEFAULT_MAX_EEPROM_WRITES_PER_HOUR,
-                    ),
-                ),
-                max_eeprom_writes_per_day=user_input.get(
-                    CONF_MAX_EEPROM_WRITES_PER_DAY,
-                    self.config_entry.options.get(
-                        CONF_MAX_EEPROM_WRITES_PER_DAY,
-                        DEFAULT_MAX_EEPROM_WRITES_PER_DAY,
-                    ),
+                mqtt_devices=user_input.get(
+                    "mqtt_devices", entry.options.get("mqtt_devices", {})
                 ),
                 cached_devices=entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES),
                 **return_kwargs,
@@ -244,7 +214,7 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
     def _languages(self):
         """Return the available register description languages."""
         languages = ["ENG"]
-        coordinator = self.config_entry.runtime_data
+        coordinator = getattr(self.config_entry, "runtime_data", None)
         agua = getattr(coordinator, "agua", None)
         if agua and getattr(agua, "devices", None):
             try:
@@ -280,6 +250,7 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
             ),
         )
         schema = {
+            vol.Optional("configure_mqtt", default=False): selector.BooleanSelector(),
             vol.Optional(
                 CONF_CONNECTION_MODE,
                 default=user_input.get(
@@ -288,51 +259,17 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
                         CONF_CONNECTION_MODE, CONNECTION_MODE_CLOUD
                     ),
                 ),
-            ): vol.In(
-                {
-                    CONNECTION_MODE_CLOUD,
-                    CONNECTION_MODE_BLUETOOTH,
-                    CONNECTION_MODE_LOCAL_MQTT,
-                }
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        CONNECTION_MODE_CLOUD,
+                        CONNECTION_MODE_BLUETOOTH,
+                        CONNECTION_MODE_LOCAL_MQTT,
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                    translation_key="connection_mode",
+                )
             ),
-            vol.Optional(
-                CONF_LOCAL_MQTT_PORT,
-                default=user_input.get(
-                    CONF_LOCAL_MQTT_PORT,
-                    self.config_entry.options.get(
-                        CONF_LOCAL_MQTT_PORT, DEFAULT_LOCAL_MQTT_PORT
-                    ),
-                ),
-            ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
-            vol.Optional(
-                CONF_ALLOW_EEPROM_WRITES,
-                default=user_input.get(
-                    CONF_ALLOW_EEPROM_WRITES,
-                    self.config_entry.options.get(
-                        CONF_ALLOW_EEPROM_WRITES, DEFAULT_ALLOW_EEPROM_WRITES
-                    ),
-                ),
-            ): bool,
-            vol.Optional(
-                CONF_MAX_EEPROM_WRITES_PER_HOUR,
-                default=user_input.get(
-                    CONF_MAX_EEPROM_WRITES_PER_HOUR,
-                    self.config_entry.options.get(
-                        CONF_MAX_EEPROM_WRITES_PER_HOUR,
-                        DEFAULT_MAX_EEPROM_WRITES_PER_HOUR,
-                    ),
-                ),
-            ): vol.All(vol.Coerce(int), vol.Range(min=1, max=120)),
-            vol.Optional(
-                CONF_MAX_EEPROM_WRITES_PER_DAY,
-                default=user_input.get(
-                    CONF_MAX_EEPROM_WRITES_PER_DAY,
-                    self.config_entry.options.get(
-                        CONF_MAX_EEPROM_WRITES_PER_DAY,
-                        DEFAULT_MAX_EEPROM_WRITES_PER_DAY,
-                    ),
-                ),
-            ): vol.All(vol.Coerce(int), vol.Range(min=1, max=500)),
             vol.Optional(
                 CONF_UPDATE_INTERVAL,
                 default=user_input.get(
@@ -383,6 +320,12 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
         errors = {}
 
         if user_input is not None:
+            if user_input.pop("configure_mqtt", False):
+                return await self.async_step_mqtt_device()
+            user_input = {
+                **self.config_entry.options,
+                **user_input,
+            }
             connection_mode = user_input.get(
                 CONF_CONNECTION_MODE,
                 self.config_entry.options.get(
@@ -393,13 +336,16 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
             try:
                 agua = self._build_client(connection_mode, user_input)
                 await agua.connect()
-                if connection_mode == CONNECTION_MODE_BLUETOOTH:
-                    await agua.validate_local_connection()
-                elif connection_mode == CONNECTION_MODE_LOCAL_MQTT:
+                if connection_mode in (
+                    CONNECTION_MODE_BLUETOOTH,
+                    CONNECTION_MODE_LOCAL_MQTT,
+                ):
                     await agua.validate_local_connection()
             except AguaIOTUnauthorized as e:
                 _LOGGER.error("Agua IOT Unauthorized: %s", e)
                 errors["base"] = "unauthorized"
+            except LocalMqttSetupError as e:
+                errors["base"] = e.key
             except AguaIOTConnectionError as e:
                 _LOGGER.error("Agua IOT Connection error: %s", e)
                 errors["base"] = "connection_error"
@@ -409,11 +355,96 @@ class AguaIOTOptionsFlowHandler(OptionsFlowWithReload):
             else:
                 return self.async_create_entry(title="", data=user_input)
             finally:
-                if agua and hasattr(agua, "stop_server"):
-                    await agua.stop_server()
+                if agua and hasattr(agua, "close"):
+                    await agua.close()
 
         return self.async_show_form(
             step_id="user",
             data_schema=self._build_schema(user_input),
             errors=errors,
+        )
+
+    async def async_step_mqtt_device(self, user_input=None):
+        devices = self.config_entry.data.get(CONF_BLE_BOOTSTRAP_DEVICES, [])
+        choices = {
+            str(device["id_device"]): device.get("name") or str(device["id_device"])
+            for device in devices
+        }
+        if not choices:
+            return self.async_abort(reason="no_cached_devices")
+        if user_input is not None and user_input.get("device") in choices:
+            self._mqtt_device = user_input["device"]
+            return await self.async_step_mqtt_settings()
+        return self.async_show_form(
+            step_id="mqtt_device",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("device"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                {"value": k, "label": v} for k, v in choices.items()
+                            ],
+                            mode=selector.SelectSelectorMode.LIST,
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_mqtt_settings(self, user_input=None):
+        devices = self.config_entry.options.get("mqtt_devices", {})
+        stored = devices.get(self._mqtt_device, {})
+        errors = {}
+        if user_input is not None:
+            import re
+
+            values = dict(user_input)
+            mac = re.sub(r"[:-]", "", str(values.get("device_mac", ""))).strip().upper()
+            if not re.fullmatch(r"[0-9A-F]{12}", mac):
+                errors["device_mac"] = "invalid_mac"
+            if any(
+                key != self._mqtt_device and value.get("device_mac") == mac
+                for key, value in devices.items()
+            ):
+                errors["device_mac"] = "invalid_mac"
+            values["device_mac"] = mac
+            if not values.get("password") and stored.get("password"):
+                values["password"] = stored["password"]
+            if not errors:
+                return self.async_create_entry(
+                    title="",
+                    data={
+                        **self.config_entry.options,
+                        "mqtt_devices": {**devices, self._mqtt_device: values},
+                    },
+                )
+        defaults = {**stored, **(user_input or {})}
+        return self.async_show_form(
+            step_id="mqtt_settings",
+            errors=errors,
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "device_mac", default=defaults.get("device_mac", "")
+                    ): str,
+                    vol.Optional("hostname", default=defaults.get("hostname", "")): str,
+                    vol.Required("port", default=defaults.get("port", 1883)): vol.All(
+                        vol.Coerce(int), vol.Range(min=1, max=65535)
+                    ),
+                    vol.Optional("username", default=defaults.get("username", "")): str,
+                    vol.Optional("password"): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD
+                        )
+                    ),
+                    vol.Optional(
+                        "allow_eeprom_writes",
+                        default=defaults.get("allow_eeprom_writes", True),
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        "write_confirmation",
+                        default=defaults.get("write_confirmation", False),
+                    ): selector.BooleanSelector(),
+                }
+            ),
         )
